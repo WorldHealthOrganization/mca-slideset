@@ -1,0 +1,280 @@
+---
+title: "Intro to R"
+output:
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Downloading and installing R
+
+
+You can obtain R from CRAN (the Comprehensive R Archive Network), at http://cran.r-project.org/. Under “Download R for Windows” click on “install R for the first time” and then on “Download R X.X.X for Windows (Currently R 4.1.2 available)", which is a self-extracting installer.
+
+After installing R, download and install R Studio Desktop at https://www.rstudio.com/products/rstudio/download/#download. R Studio is an integrated development environment which improves the user experience for R, allowing syntax-highlighting, tools for plotting, viewing history, and managing your workspace.   
+
+
+Apart from what you have downloaded there are thousands of add-on packages to R that add extra features and functionality, including related to epidemiology. You can download these manually, as needed.
+
+
+## How R works
+
+R is an object-oriented programming language, different from the record-oriented nature of SAS. While in SAS each procedure involves the sequential evaluation of every record in the data file before moving to the next step or procedure, each R command line manipulates one or more objects and values can be assigned to other objects or displayed.
+
+Standard functions are built into R in a package named _base_. Additional functions can be installed in packages and are stored locally on the disk in a sub-directory of the folder where R is installed called "library". 
+
+### R Studio
+
+The default set-up for R studio includes a space for script files on the top left. Multiple script files can be open at a time and will run from the same working directory until changed. The bottom left is the console where you can see previously run commands and results. The top right shows the environment and any objects/data available. The bottom right has tabs to show the files in the working directory ("Files"), plots created in this session ("Plots"), installed and loaded packages ("Packages"), and options for help on functions ("Help"). 
+
+### The basics
+
+R is case-sensitive, most functions are entirely lowercase while logical values ( _TRUE/T_ and _FALSE/F_) are always uppercase. 
+
+Important to remember:
+Everything that __exists__ in R is an "object".
+Everything than __happens__ in R is the result of a function.
+
+Commands can be separated by a new line. Comments can be inserted anywhere, starting with a hash mark (#), everything from the hash mark to the end of the line is a comment.
+
+Documentation on any function from _base_ or a package that has been loaded can be obtained by typing "?" in the console (bottom left window) followed by the name of the function and pressing enter. The function documentation will appear in the "Help" window on the bottom right. 
+
+```{r}
+
+?mean()
+
+```
+
+Lines of code can be run from the script by pressing ctrl+enter when the cursor is on the relevant line. Or you can highlight several lines and press ctrl+enter (or the run button at the top right of the script window).
+
+#### Variable assignment, arithmetic and logical operators 
+
+Values are assigned using either "=" or "<-" (keyboard shortcut Alt+-). Typing the variable after assignment will print the value. 
+
+```{r}
+
+x = 1
+y <- 2
+x
+y
+
+```
+
+x and y now hold the values 1 and 2, respectively. They can be used in arithmetic or R functions. 
+
+Arithmetic operators:
+
+| _Operator_ |	_Description_  |
+| ---------- | --------------- |
+| +          |	addition       |
+| -          |	subtraction    |
+| *          |	multiplication |
+| /          |	division       |
+| ^ or **    |	exponentiation |
+
+Logical operators:
+
+| _Operator_ |	_Description_               |
+| ---------- | ---------------------------- |
+| >          | greater than                 |
+| >=         | greater than or equal to     |
+| ==         | exactly equal to             |
+| !=         | not equal to                 |
+| &          | and                          |
+| |          | or                           |
+| 0<=x<=1    | (x>=0) & (x<=1)              |
+| is.na(x)   | test for missing values in x |
+
+
+```{r}
+
+x + y       # x plus y
+z <- y - x  # assign to z the value of y minus x
+z           # show the value of z
+is.na(z)    # is the value of z missing?
+z < 3       # is the value of z less than 3?
+z == 3      # is the value of z equal to 3?
+z != 3      # is the value of z not equal to 3?
+
+```
+
+Multiple values can be assigned to an object with _'c()'_ or __concatenate__. 
+
+```{r}
+
+a <- c(3,5,7)   # assign 3, 5, and 7 to a
+a               # show the value of a
+a + 1           # add one to a (repeats for each value of a), this value is shown but not saved (no assignment operator)
+max(a)          # what is the maximum 
+a <- 7          # over write the value of a with 7
+a               # show the value of a
+rm(a)           # remove the value of a from the environment (can no longer be used)
+
+```
+
+#### Data classes and structures
+
+Several data classes can be used in R including numeric, ordered factors, character strings, and logical values. Structure of data can be identified with the function _'str()'_. Character strings should always be enclosed in quotation marks and logical values should always be in uppercase. 
+
+```{r}
+
+str(x)                        # structure of x
+str("hello")                  # structure of "hello"
+b <- list(1, TRUE, "hello")   # lists can hold multiple structures at the same time
+str(b)                        # structure of b
+
+
+```
+
+Data can be stored in vectors, lists, data frames, and more. 
+
+Vectors are the simplest data structure, consisting of an ordered collection of numbers. A number itself could be considered a vector with the length of one. 
+
+Vectors can be subset using square brackets ([]) after the name of the vector.
+
+```{r}
+
+myvector <- c(2,4,8,3,9,4)  # assign values to "myvector"
+myvector                    # show the values of myvector
+myvector[2]                 # show the second value of myvector
+myvector[1:3]               # show the first three values of myvector
+myvector[c(2,4)]            # show the second and fourth values
+myvector<=4                 # which values of myvector are <= 4?
+myvector[myvector<=4]       # show the values of myvector that are <= 4 
+
+```
+Data frames are the most common way to store data in R. A data frame is made up of a list of equal-length vectors where each element of the list is a column and the length of each element of the list is the number of rows. Data frames can store different classes in each column (numeric, character, etc). Let's import data before manipulating data frames. 
+
+#### Importing and exploring data
+
+Data can be imported in a variety of formats including csv, xlsx, or from SPSS, SAS, or STATA. Data can also be pulled directly into R from xmart/GHO. Importing files other than csv may require installing/loading a specific package. 
+
+##### Installing packages
+
+Packages can be installed from R Studio by clicking on the "Packages" window in the bottom right corner, pressing the "Install" button, and typing the package name(s), and clicking "Install". After packages are installed, they must be loaded in order to use. Packages are loaded in the console or code script with the function _'library(packagename)'_. Packages can also be installed with code (but the lines are commented out in this script).
+
+```{r}
+
+# install.packages("readxl")  # install package "readxl" to be able to read Excel files into R
+library(readxl)             # load package readxl
+
+```
+
+
+##### Importing Excel data
+
+When importing data into R, it's important to consider where the working directory for R is located. If your data is saved in the working directory, you only need to specify the file name. If the file is saved elsewhere, the entire path must be used. You can learn the current working director with _'getwd()'_ and you can change it with _'setwd("yourpathhere")'_. The file being read in should be assigned (with the assignment operator "<-", keyboard shortcut Alt+-) to something. Below I assign the policy survey file: __"PolicySurvey_All.labels.xlsx"__ to the object __"policySurvey"__. Be sure to replace my path with yours!
+
+```{r}
+
+policySurvey <- read_excel("C:/Users/kpeve/OneDrive - London School of Hygiene and Tropical Medicine/My OneDrive Documents/WHO/Policy-survey/data/raw/PolicySurvey_All.labels.xlsx")
+
+```
+
+If you click the top right window "Environment" tab, you should see (in addition to other objects we have created today), __"policySurvey"__, 155 observations of 1016 variables. If you click it, it will open a window where you can scroll around to look at the raw data. Let's have a look at the data. The function __'head()'__ shows the first six of whatever you put in the brackets. If it's a vector, the first six items. If it's a data frame, the first six rows, if it's a column of a data frame, the first six values. Columns of a data frame are specified after the name of the data frame with a "$". 
+
+```{r}
+
+head(policySurvey)       # show the first six rows of policySurvey (it has too many columns to show all of them, but you'll see the first six rows of the first few columns and then a list of other columns). Note it also shows the data class of each column. The first several columns are "<chr>" for character strings. 
+head(policySurvey$iso3) # show the first six values of the iso3 column
+str(policySurvey$MN_42) # show the data class of the MN_42 variable
+
+```
+
+##### Summarising data
+
+Let's get further into the data:
+
+```{r}
+
+table(policySurvey$who_region)          # see the frequencies for who_region
+table(policySurvey$AD_26_e_1)           # table of AD_26_e_1 (age minors can receive mental health services without parent/legal consent)
+mean(policySurvey$AD_26_e_1, na.rm=T)   # mean of AD_26_e_1, note because there are missing values, you must specify "na.rm=T" to remove (rm) NA values from the equation
+summary(policySurvey$AD_26_e_1)         # summary shows the min, max, 1st/3rd quartiles, mean, median, and number of missing values (na.rm=T isn't needed)
+min(policySurvey$AD_26_e_1, na.rm = T)  # show minimum value (note na.rm=T is needed), max() shows the maximum value
+
+```
+
+##### Visualising data
+
+The most common plotting package is called ggplot2. We need to install and load it. 
+
+```{r}
+
+# install.packages("ggplot2", "stringr")
+library(ggplot2)
+library(stringr)
+
+# a very simple plot
+
+ggplot(data=policySurvey, aes(x=who_region))+   # aes is for aesthetics, bar plots only need an x or a y but not both, most other types of plots require x and y to be specified 
+  geom_bar()                                    # define the type of plot
+
+
+# let's customise it
+
+ggplot(data=policySurvey, aes(x=str_wrap(who_region, 10), fill=who_region))+   # wrap the region labels after 10 characters to fit better 
+  geom_bar() +
+  labs(x="WHO Region", y="Number of countries responding to the survey", title="Regional representation in policy survey")+
+  theme_classic() + # get rid of the grey tile background
+  guides(fill = F)  # don't show the legend for colour
+
+```
+
+##### Xmart data
+
+Data can be pulled from xmart directly into R. We will need to install/load a few packages. The code below takes data from the MNCAH xmart, specifically the MCA_FACT_DATA table. It filters for just the rows including indicators for AC_A4V (ANC4) and TECI_ORSZINC. It also selects just the columns specified (excluding other system columns we don't need). If you get an HTTP error 500, this means the server is busy, try again in a few min. I get this error frequently but can often run the line again successfully immediately or 5-10 minutes later. 
+
+```{r}
+
+# install.packages("jsonlite", "httr")
+library(jsonlite)
+library(httr)
+
+xmart <- fromJSON("https://frontdoor-l4uikgap6gz3m.azurefd.net/MNCAH/MCA_FACT_DATA?$filter=INDICATOR_FK%20in%20(%22AC_A4V%22,%22TECI_ORSZINC%22)&$select=INDICATOR_FK,YEAR_FK,COUNTRY_FK,COUNTRY_FK__CODE,ValueNumeric,ValueLow,ValueHigh,ValueStdDev,ValueStdErr,Comments,AGEGROUP_FK,Answer_FK,CauseGHE_FK,CauseGHEChild_FK,CauseENVCAUSE_FK,DatasourceLong,DatasourceShort,ImpSan_FK,ImpWater_FK,LivingArrangements_FK,MEASDEF_FK,MOTHEREDUCATION_FK,ProficiencyLevel_FK,ResideLTA_FK,RESIDENCEAREA_FK,SABDefinition_FK,SEVERITY_FK,SEVERITYHEARING_FK,SEVERITYVISION_FK,SEX_FK,WEALTHQUINTILE_FK")
+
+ANC4_ORSZ <- as.data.frame(xmart$value)
+
+# what are the column names of the data frame
+
+names(ANC4_ORSZ)
+
+```
+
+
+##### Data manipulation
+
+Dplyr is part of a common data manipulation package called tidyverse. 
+
+```{r}
+
+# install.packages("tidyverse")
+library(tidyverse)
+
+# Let's filter for just ANC4 rows
+# the pipe operator ( %>% ) passes data from one function to the next to continue manipulating the same object. The keyboard shortcut is ctrl+shift+M
+
+ANC4 <- ANC4_ORSZ %>% filter(INDICATOR_FK=="AC_A4V")
+
+# Notice in the environment tab, you now have ANC$_ORSZ (2433 observations) and a second object ANC4 which is 839 observations, let's see what years have data for ANC4
+
+table(ANC4$YEAR_FK)
+
+#let's take just data from 2010 or later
+
+ANC4 <- ANC4 %>% filter(YEAR_FK>=2010) # this replaces the previous ANC4 data frame with a data frame for ANC4 only including rows from 2010 or later
+table(ANC4$YEAR_FK)
+
+# how many countries have data
+
+length(unique(ANC4$COUNTRY_FK__CODE))
+
+```
+
+
+
+
+
+

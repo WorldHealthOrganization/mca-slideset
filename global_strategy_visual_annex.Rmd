@@ -1,0 +1,1164 @@
+---
+title: "Global strategy visual annex"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, eval=TRUE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+
+#renv::restore()
+source("requirements.R")
+library(rio)
+library(svglite)
+
+# country/area list from xmart: https://extranet.who.int/xmart4/REFMART/data/REF_COUNTRY
+xmart_refCountry <- fromJSON("https://frontdoor-l4uikgap6gz3m.azurefd.net/REFMART/REF_COUNTRY")
+# INDICATOR_FK,YEAR_FK,ValueNumeric,COUNTRY_FK ValueLow ValueHigh ValueStdDev ValueStdErr Comments COUNTRY_FK__CODE DatasourceLong RESIDENCEAREA_FK__CODE SEX_FK WEALTHQUINTILE_FK
+
+ref_country <- as.data.frame(xmart_refCountry$value)
+ref_country_members <- ref_country %>% filter(WHO_LEGAL_STATUS == "M")
+
+# saveRDS(ref_country, "data/ref_country.rds")
+# ref_country <- read_rds("data/ref_country.rds")
+
+ref_country$region <- case_when(
+  ref_country$GRP_WHO_REGION == "AFR" ~ "African Region",
+  ref_country$GRP_WHO_REGION == "AMR" ~ "Region of the Americas",
+  ref_country$GRP_WHO_REGION == "SEAR" ~ "South-East Asian Region",
+  ref_country$GRP_WHO_REGION == "EUR" ~ "European Region",
+  ref_country$GRP_WHO_REGION == "EMR" ~ "Eastern Mediterranean Region",
+  ref_country$GRP_WHO_REGION == "WPR" ~ "Western Pacific Region"
+)
+
+ref_country$income[ref_country$GRP_WB_INCOME=="HIC"] <- "High"
+ref_country$income[ref_country$GRP_WB_INCOME=="UMC"] <- "Upper-middle"
+ref_country$income[ref_country$GRP_WB_INCOME=="LMC"] <- "Lower-middle"
+ref_country$income[ref_country$GRP_WB_INCOME=="LIC"] <- "Low"
+
+ref_country <- ref_country %>% mutate(income=factor(income, levels=c("High", "Upper-middle", "Lower-middle", "Low")))
+
+```
+
+# SURVIVE (END PREVENTABLE MORTALITY) 
+
+```{r survive}
+# trends in maternal death ####
+
+GHO_maternalMMR_2000_2017_regGlob <- read_csv("data/raw/GHO_maternalMMR_2000_2017_regionalGlobal.csv")
+
+years <- c(2000, 2005, 2010, 2015, 2017)
+
+mm <- ggplot(data = GHO_maternalMMR_2000_2017_regGlob %>% filter(SpatialDimValueCode == "GLOBAL") %>% filter(Indicator == "Maternal mortality ratio (per 100 000 live births)"), aes(x = as.numeric(Period), y = FactValueNumeric)) +
+  geom_line(aes(y = FactValueNumeric), size = 1, colour = "#7a0177") +
+  geom_ribbon(aes(ymin = FactValueNumericLow, ymax = FactValueNumericHigh), alpha = 0.4, fill = "#7a0177") +
+  scale_x_continuous(breaks = c(2010,2015,2017), limits = c(2010,2020)) +
+  scale_y_continuous(breaks = seq(from = 0, to = 300, by = 50), limits = c(0, 300), expand = c(0, 0)) +
+  theme_classic() +
+  theme(legend.position = "bottom", text = element_text(size = 16)) +
+  geom_text(data = GHO_maternalMMR_2000_2017_regGlob %>% filter(SpatialDimValueCode == "GLOBAL") %>% mutate(year_round = floor(as.numeric(Period))) %>% filter(year_round %in% c(2010,2015,2017)) %>% filter(Indicator == "Maternal mortality ratio (per 100 000 live births)"), aes(label = sprintf("%1.0f", FactValueNumeric), vjust = -.8, y = FactValueNumericHigh), show.legend = F, fontface = "bold", colour = "#7a0177") +
+  labs(x = NULL, y = "Deaths per 100,000 live births", fill = NULL, colour = NULL, title = "Maternal mortality")
+
+# by region
+
+ggplot(data = GHO_maternalMMR_2000_2017_regGlob %>% filter(SpatialDimValueCode != "GLOBAL") %>% filter(Indicator == "Maternal mortality ratio (per 100 000 live births)"), aes(x = as.numeric(Period), y = FactValueNumeric)) +
+  geom_line(aes(y = FactValueNumeric), size = 1, colour = "#7a0177") +
+  geom_ribbon(aes(ymin = FactValueNumericLow, ymax = FactValueNumericHigh), alpha = 0.4, fill = "#7a0177") +
+  scale_x_continuous(breaks = c(2010,2015,2017), limits = c(2010,2018)) +
+ # scale_y_continuous(breaks = seq(from = 0, to = 300, by = 50), limits = c(0, 300), expand = c(0, 0)) +
+  theme_classic() +
+  theme(legend.position = "bottom", text = element_text(size = 16)) +
+  geom_text(data = GHO_maternalMMR_2000_2017_regGlob %>% filter(SpatialDimValueCode != "GLOBAL") %>% mutate(year_round = floor(as.numeric(Period))) %>% filter(year_round %in% c(2010,2015,2017)) %>% filter(Indicator == "Maternal mortality ratio (per 100 000 live births)"), aes(label = sprintf("%1.0f", FactValueNumeric), vjust = -.8, y = FactValueNumericHigh), show.legend = F, fontface = "bold", colour = "#7a0177") +
+  labs(x = NULL, y = "Deaths per 100,000 live births", fill = NULL, colour = NULL, title = "Maternal mortality")+
+  facet_wrap(~Location)
+
+#ggsave("figures/global_strat_mortality_region.png", width=15, height=10, unit="in")
+
+# by income group
+
+GHO_maternalMMR_2000_2017_country <- read_csv("data/raw/GHO_maternalMMR_2000_2017_country.csv")
+GHO_maternalMMR_2000_2017_country$Indicator[GHO_maternalMMR_2000_2017_country$Indicator=="Maternal mortality ratio (per 100 000 live births)"] <- "MMR"
+GHO_maternalMMR_2000_2017_country$Indicator[GHO_maternalMMR_2000_2017_country$Indicator=="Number of maternal deaths"] <- "Deaths"
+
+GHO_maternalMMR_2000_2017_country <- GHO_maternalMMR_2000_2017_country %>% pivot_wider(names_from = Indicator, values_from = c(FactValueNumeric, FactValueNumericLow, FactValueNumericHigh))
+
+GHO_maternalMMR_2000_2017_country$births_value <- GHO_maternalMMR_2000_2017_country$FactValueNumeric_Deaths / GHO_maternalMMR_2000_2017_country$FactValueNumeric_MMR * 100000
+
+GHO_maternalMMR_2000_2017_country$births_valueLow <- GHO_maternalMMR_2000_2017_country$FactValueNumericLow_Deaths / GHO_maternalMMR_2000_2017_country$FactValueNumericLow_MMR * 100000
+
+GHO_maternalMMR_2000_2017_country$births_valueHigh <- GHO_maternalMMR_2000_2017_country$FactValueNumericHigh_Deaths / GHO_maternalMMR_2000_2017_country$FactValueNumericHigh_MMR * 100000
+
+GHO_maternalMMR_2000_2017_country <- GHO_maternalMMR_2000_2017_country %>% left_join(ref_country, by=c("COUNTRY_FK__CODE"="CODE_ISO_3")) %>% group_by()
+
+
+
+# nmr u5mr
+
+mort_rates_2021 <- read_excel("C:/Users/kpeve/OneDrive - London School of Hygiene and Tropical Medicine/My OneDrive Documents/WHO/data/external/UNIGME-2021-SDGRegion-Rates-Deaths-Under-five.xlsx", skip = 15) %>%
+  pivot_longer(cols = c(3:26)) %>%
+  separate(name, c("age", "measure"), sep = "_") %>%
+  pivot_wider(names_from = measure) %>%
+  mutate(statistic = case_when(str_detect(age, "MR") ~ "rate", str_detect(age, "Deaths") ~ "deaths"))
+
+years <- c(1990, 1995, 2000, 2005, 2010, 2015, 2020)
+years <- c(2010,2015,2020)
+
+# plot parts
+rate_line <- geom_line(aes(y = median, colour = age), size = 1.5)
+deaths_line <- geom_line(aes(y = median / 1000000, colour = age), size = 1.5)
+ribbon <- geom_ribbon(aes(ymin = lower, ymax = upper, fill = age), alpha = 0.4)
+xscale <- scale_x_continuous(breaks = years)
+yscale_rate <- scale_y_continuous(breaks = seq(from = 0, to = 100, by = 25), limits = c(0, 100), expand = c(0, 0))
+yscale_deaths <- scale_y_continuous(breaks = seq(from = 0, to = 15, by = 5), limits = c(0, 15), expand = c(0, 0))
+colour_rate <- scale_colour_manual(breaks = c("NMR", "IMR", "CMR", "U5MR"), labels = c("Neonatal mortality rate\n(first 28 days)", "Infant mortality rate\n(0-11 months)", "Child mortality rate\n(age 1-4)", "Under-five mortality rate"), values = c("#a06265", "#cf9e9e", "#93aacd", "#5074b1"))
+fill_rate <- scale_fill_manual(breaks = c("NMR", "IMR", "CMR", "U5MR"), labels = c("Neonatal mortality rate\n(first 28 days)", "Infant mortality rate\n(0-11 months)", "Child mortality rate\n(age 1-4)", "Under-five mortality rate"), values = c("#a06265", "#cf9e9e", "#93aacd", "#5074b1"))
+theme <- theme(legend.position = "bottom", text = element_text(size = 16), legend.text = element_text(size = 11.5))
+labs_rate <- labs(x = NULL, y = "Deaths per 1,000", fill = NULL, colour = NULL)
+labs_deaths <- labs(x = NULL, y = "Deaths (in millions)", fill = NULL, colour = NULL)
+colour_deaths <- scale_colour_manual(breaks = c("Neonatal Deaths", "Infant Deaths", "Child Deaths aged 1 to 4", "Under-five Deaths"), labels = c("Neonatal deaths\n(first 28 days)", "Infant deaths\n(0-11 months)", "Child deaths\n(age 1-4)", "Under-five deaths"), values = c("#a06265", "#cf9e9e", "#93aacd", "#5074b1"))
+fill_deaths <- scale_fill_manual(breaks = c("Neonatal Deaths", "Infant Deaths", "Child Deaths aged 1 to 4", "Under-five Deaths"), labels = c("Neonatal deaths\n(first 28 days)", "Infant deaths\n(0-11 months)", "Child deaths\n(age 1-4)", "Under-five deaths"), values = c("#a06265", "#cf9e9e", "#93aacd", "#5074b1"))
+# values =  c('#66c2a5','#fc8d62','#8da0cb','#e78ac3'))+
+dim2 <- guides(fill = guide_legend(nrow = 2, byrow = TRUE), colour = guide_legend(nrow = 2, byrow = TRUE))
+size_deaths <- scale_size_continuous(range = c(9, 15), guide = F, limits = c(1.2 * 1000000, 12.6 * 1000000))
+
+##
+## NMR /U5MR since 1990
+
+nmr.u5mr <- ggplot(data = mort_rates_2021 %>% filter(Region == "World") %>% filter(statistic == "rate") %>% filter(age == "NMR" | age=="U5MR"), aes(x = Year, y = median, fill = age)) +
+  theme_classic() +
+  rate_line +
+  ribbon +
+  scale_x_continuous(breaks = years, limits = c(2010,2020)) +
+  scale_y_continuous(breaks = seq(from = 0, to = 65, by = 10), limits = c(0, 65), expand = c(0, 0)) +
+  fill_rate +
+  colour_rate +
+  theme +
+  labs_rate +
+  geom_text(data = mort_rates_2021 %>% filter(Region == "World") %>% filter(statistic == "rate") %>% filter(Year %in% c(2010, 2015, 2020)) %>% filter(age == "NMR" | age=="U5MR"), aes(label = sprintf("%1.0f", median), vjust = -.2, colour = age, y = upper), show.legend = F, fontface = "bold", size = 4.5) +
+  labs(x = NULL, y = "Deaths per 1,000", fill = NULL, colour = NULL, title = "Neonatal and under-5 mortality")+
+  guides(colour=guide_legend(nrow=2), fill=guide_legend(nrow=2))
+
+
+
+# Stillbirth rate
+
+
+stillbirth <- read_excel("data/external/Stillbirth-rates-and-deaths_2020_downloadUNICEF220407.xlsx", sheet="Regional and global rates",
+    skip = 15) %>%
+  pivot_longer(cols = c(3:22), names_to="year") %>% 
+  mutate(year_round = floor(as.numeric(year))) %>% 
+  filter(!is.na(value) & Region.Name!="Region.Name") %>%
+  filter(Region.Name=="World") %>% 
+  distinct() %>% 
+  pivot_wider(id_cols = c("Region.Name", "year", "year_round"), names_from = "Uncertainty.Bounds*", values_from=value) %>% 
+  mutate(Median=as.numeric(Median), Upper=as.numeric(Upper), Lower=as.numeric(Lower))
+
+# trends since 2000
+
+sb <- ggplot(data = stillbirth %>% filter(Region.Name == "World"), aes(x = as.numeric(year_round), y = Median)) +
+  geom_line(aes(y = Median), size = 1, colour = "#D09A00") +
+  geom_ribbon(aes(ymin = Lower, ymax = Upper), alpha = 0.4, fill = "#FFC724") +
+  scale_x_continuous(limits = c(2010,2020), breaks=c(2010,2015,2019)) +
+  scale_y_continuous(breaks = seq(from = 0, to = 25, by = 5), limits = c(0, 25), expand = c(0, 0)) +
+  theme_classic() +
+  theme(legend.position = "bottom", text = element_text(size = 16)) +
+  geom_text(data = stillbirth %>% filter(Region.Name == "World") %>% filter(year_round %in% c(2000, 2005, 2010, 2015, 2019)), aes(label = sprintf("%1.0f", Median), vjust = -.8, y = Upper), show.legend = F, fontface = "bold", colour = "#D09A00") +
+  labs(x = NULL, y = "Stillbirths per 1,000 total births", fill = NULL, colour = NULL, title = "Stillbirth")
+
+
+#adolescent mort
+
+# all cause - data files from Regina
+
+All_cause_All_years <- read_dta("data/raw/All cause_All years.dta")
+All_cause_All_years$sex[All_cause_All_years$sex == 1] <- "Males"
+All_cause_All_years$sex[All_cause_All_years$sex == 2] <- "Females"
+All_cause_All_years$age[All_cause_All_years$age == 10] <- "10-14 years"
+All_cause_All_years$age[All_cause_All_years$age == 15] <- "15-19 years"
+
+ad <- ggplot(All_cause_All_years %>% filter(global == 1) %>% filter(age == "10-14 years" | age == "15-19 years") %>% filter(sex != 3) %>% mutate(sex.age = reorder_within(sex, year, age, sep = ", ")) %>% mutate(label = if_else(year == max(year), as.character(sex.age), NA_character_)), aes(x = year, y = death_rate, fill = sex.age)) +
+  geom_line(aes(y = death_rate, colour = sex.age), size = 2) +
+  scale_x_continuous(breaks = c(2010, 2015, 2019), limits = c(2010, 2020)) +
+  scale_y_continuous(breaks = seq(from = 0, to = 150, by = 25), limits = c(0, 150), expand = c(0, 0)) +
+  scale_colour_manual(values = c("#fdae61", "#d7191c", "#abd9e9", "#2c7bb6")) +
+  theme_classic() +
+  theme(legend.position = "bottom", text = element_text(size = 18)) +
+  labs(x = NULL, y = "Deaths per 100,000 population", fill = NULL, colour = NULL, title = "Adolescent mortality") +
+  guides(colour=guide_legend(nrow=2))
+
+plot_grid(mm, sb, nmr.u5mr,ad, align = "v", nrow = 2, rel_heights = c(.5, .5))
+
+#ggsave("figures/global_strat_mortality.png", width=15, height=10, unit="in")
+
+
+### survive, by region ###
+
+## maternal
+
+xmart <- fromJSON("https://frontdoor-l4uikgap6gz3m.azurefd.net/MNCAH/MCA_FACT_DATA?$filter=INDICATOR_FK%20in%20(%22BD_MMR%22,%22BD_NMD%22)")
+# INDICATOR_FK,YEAR_FK,ValueNumeric,COUNTRY_FK ValueLow ValueHigh ValueStdDev ValueStdErr Comments COUNTRY_FK__CODE DatasourceLong RESIDENCEAREA_FK__CODE SEX_FK WEALTHQUINTILE_FK
+
+mmr <- as.data.frame(xmart$value)
+
+mmr_regional <- mmr %>% dplyr::select(INDICATOR_FK, ValueNumeric, ValueHigh, ValueLow, YEAR_FK, COUNTRY_FK, COUNTRY_FK__CODE) %>% 
+  pivot_wider(names_from = INDICATOR_FK, values_from = c(ValueNumeric, ValueHigh, ValueLow)) %>% 
+  mutate(
+    births=ValueNumeric_BD_NMD/ValueNumeric_BD_MMR*100000,
+    birthshigh=ValueHigh_BD_NMD/ValueHigh_BD_MMR*100000,
+    birthslow=ValueLow_BD_NMD/ValueLow_BD_MMR*100000
+  ) %>% 
+  left_join(ref_country, by=c("COUNTRY_FK__CODE"="CODE_ISO_3")) %>% 
+  group_by(region, YEAR_FK) %>% 
+  summarise(deaths=sum(ValueNumeric_BD_NMD), births=sum(births), deathslow=sum(ValueLow_BD_NMD), birthslow=sum(birthslow), deathshigh=sum(ValueHigh_BD_NMD), birthshigh=sum(birthshigh)) %>% 
+  mutate(mmr=deaths/births*100000, mmrlow=deathslow/birthslow*100000, mmrhigh=deathshigh/birthshigh*100000)
+
+mmr_reg <- ggplot(mmr_regional %>% filter(YEAR_FK>=2010), aes(x = as.numeric(YEAR_FK), y = mmr, fill = region)) +
+  geom_line(aes(y = mmr, colour = region), size = 2) +
+  scale_x_continuous(breaks = c(2010, 2015, 2017), limits = c(2010, 2028)) +
+  geom_ribbon(aes(ymin = mmrlow, ymax = mmrhigh, fill = region), alpha = 0.4)+
+ # scale_y_continuous(breaks = seq(from = 0, to = 250, by = 25), limits = c(0, 250), expand = c(0, 0)) +
+  scale_color_viridis_d() +
+  scale_fill_viridis_d() +
+  theme_classic() +
+  theme(legend.position = "none", text = element_text(size = 18)) +
+  labs(x = NULL, y = "Deaths per 100,000 live births", fill = NULL, colour = NULL, title = "Maternal mortality") +
+  geom_text_repel(mmr_regional %>% filter(YEAR_FK==2017), mapping=aes(label = region), nudge_x = 2, direction = "y", hjust = "left", size = 4)
+
+
+## mmr lmic
+
+mmr_income <- mmr %>% dplyr::select(INDICATOR_FK, ValueNumeric, ValueHigh, ValueLow, YEAR_FK, COUNTRY_FK, COUNTRY_FK__CODE) %>% 
+  pivot_wider(names_from = INDICATOR_FK, values_from = c(ValueNumeric, ValueHigh, ValueLow)) %>% 
+  mutate(
+    births=ValueNumeric_BD_NMD/ValueNumeric_BD_MMR*100000,
+    birthshigh=ValueHigh_BD_NMD/ValueHigh_BD_MMR*100000,
+    birthslow=ValueLow_BD_NMD/ValueLow_BD_MMR*100000
+  ) %>% 
+  left_join(ref_country, by=c("COUNTRY_FK__CODE"="CODE_ISO_3")) %>% 
+  group_by(GRP_WB_INCOME, YEAR_FK) %>% 
+  summarise(deaths=sum(ValueNumeric_BD_NMD), births=sum(births), deathslow=sum(ValueLow_BD_NMD), birthslow=sum(birthslow), deathshigh=sum(ValueHigh_BD_NMD), birthshigh=sum(birthshigh)) %>% 
+  mutate(mmr=deaths/births*100000, mmrlow=deathslow/birthslow*100000, mmrhigh=deathshigh/birthshigh*100000)
+
+mmr_inc <- ggplot(mmr_income %>% filter(YEAR_FK>=2010), aes(x = as.numeric(YEAR_FK), y = mmr, fill = GRP_WB_INCOME)) +
+  geom_line(aes(y = mmr, colour = GRP_WB_INCOME), size = 2) +
+  scale_x_continuous(breaks = c(2010, 2015, 2017), limits = c(2010, 2028)) +
+  geom_ribbon(aes(ymin = mmrlow, ymax = mmrhigh, fill = GRP_WB_INCOME), alpha = 0.4)+
+ # scale_y_continuous(breaks = seq(from = 0, to = 250, by = 25), limits = c(0, 250), expand = c(0, 0)) +
+  scale_color_viridis_d() +
+  scale_fill_viridis_d() +
+  theme_classic() +
+  theme(legend.position = "none", text = element_text(size = 18)) +
+  labs(x = NULL, y = "Deaths per 100,000 live births", fill = NULL, colour = NULL, title = "Maternal mortality") +
+  geom_text_repel(mmr_income %>% filter(YEAR_FK==2017), mapping=aes(label = GRP_WB_INCOME), nudge_x = 2, direction = "y", hjust = "left", size = 4)
+
+
+## stillbirth
+
+stillbirth_sb <- read_excel("data/external/Stillbirth-rates-and-deaths_2020_downloadUNICEF220407.xlsx", sheet="Country stillbirth",
+    skip = 14) %>%
+  pivot_longer(cols = c(4:23), names_to="year") %>% 
+  mutate(year_round = floor(as.numeric(year))) %>% 
+  filter(!is.na(value)) %>%
+  pivot_wider(id_cols = c("ISO.Code", "Country.Name", "year", "year_round"), names_from = "Uncertainty.Bounds*", values_from=value) %>% 
+  mutate(Median_sb=as.numeric(Median), Upper_sb=as.numeric(Upper), Lower_sb=as.numeric(Lower)) %>% 
+  dplyr::select(-c(Median, Upper, Lower))
+
+stillbirth_rate <- read_excel("data/external/Stillbirth-rates-and-deaths_2020_downloadUNICEF220407.xlsx", sheet="Country rates",
+    skip = 14) %>%
+  pivot_longer(cols = c(4:23), names_to="year") %>% 
+  mutate(year_round = floor(as.numeric(year))) %>% 
+  filter(!is.na(value)) %>%
+  pivot_wider(id_cols = c("ISO.Code", "Country.Name", "year", "year_round"), names_from = "Uncertainty.Bounds*", values_from=value) %>% 
+  mutate(Median_rate=as.numeric(Median), Upper_rate=as.numeric(Upper), Lower_rate=as.numeric(Lower))%>% 
+  dplyr::select(-c(Median, Upper, Lower))
+
+stillbirth_ratesb <- full_join(stillbirth_sb, stillbirth_rate, by=c("ISO.Code", "year", "year_round"))
+
+stillbirth_ratesb$births_med <- stillbirth_ratesb$Median_sb/stillbirth_ratesb$Median_rate*1000
+stillbirth_ratesb$births_hi <- stillbirth_ratesb$Upper_sb/stillbirth_ratesb$Upper_rate*1000
+stillbirth_ratesb$births_lo <- stillbirth_ratesb$Lower_sb/stillbirth_ratesb$Lower_rate*1000
+
+stillbirth_ratesb <- stillbirth_ratesb %>% left_join(ref_country, by=c("ISO.Code"="CODE_ISO_3")) 
+
+stillbirth_reg <- stillbirth_ratesb %>% 
+  group_by(region, year, year_round) %>% 
+  summarise(
+    Median=(sum(Median_sb)/sum(births_med)*1000), 
+    Upper=(sum(Upper_sb)/sum(births_hi)*1000), 
+    Lower=(sum(Lower_sb)/sum(births_lo)*1000))
+
+sb_reg <- ggplot(stillbirth_reg %>% filter(year_round>=2010), aes(x = as.numeric(year), y = Median, fill = region)) +
+  geom_line(aes(y = Median, colour = region), size = 2) +
+  scale_x_continuous(breaks = c(2010, 2015, 2019), limits = c(2010, 2028)) +
+  geom_ribbon(aes(ymin = Lower, ymax = Upper, fill = region), alpha = 0.4)+
+ # scale_y_continuous(breaks = seq(from = 0, to = 250, by = 25), limits = c(0, 250), expand = c(0, 0)) +
+  scale_color_viridis_d() +
+  scale_fill_viridis_d() +
+  theme_classic() +
+  theme(legend.position = "none", text = element_text(size = 18)) +
+  labs(x = NULL, y = "Stillbirths per 1,000 total births", fill = NULL, colour = NULL, title = "Stillbirths") +
+  geom_text_repel(stillbirth_reg %>% filter(year_round==2019), mapping=aes(label = region), nudge_x = 2, direction = "y", hjust = "left", size = 4)
+
+# by income grp
+
+stillbirth_income <- stillbirth_ratesb %>% 
+  group_by(GRP_WB_INCOME, year, year_round) %>% 
+  summarise(
+    Median=(sum(Median_sb)/sum(births_med)*1000), 
+    Upper=(sum(Upper_sb)/sum(births_hi)*1000), 
+    Lower=(sum(Lower_sb)/sum(births_lo)*1000))
+
+sb_inc <- ggplot(stillbirth_income %>% filter(year_round>=2010), aes(x = as.numeric(year), y = Median, fill = GRP_WB_INCOME)) +
+  geom_line(aes(y = Median, colour = GRP_WB_INCOME), size = 2) +
+  scale_x_continuous(breaks = c(2010, 2015, 2019), limits = c(2010, 2028)) +
+  geom_ribbon(aes(ymin = Lower, ymax = Upper, fill = GRP_WB_INCOME), alpha = 0.4)+
+ # scale_y_continuous(breaks = seq(from = 0, to = 250, by = 25), limits = c(0, 250), expand = c(0, 0)) +
+  scale_color_viridis_d() +
+  scale_fill_viridis_d() +
+  theme_classic() +
+  theme(legend.position = "none", text = element_text(size = 18)) +
+  labs(x = NULL, y = "Stillbirths per 1,000 total births", fill = NULL, colour = NULL, title = "Stillbirths") +
+  geom_text_repel(stillbirth_income %>% filter(year_round==2019), mapping=aes(label = GRP_WB_INCOME), nudge_x = 2, direction = "y", hjust = "left", size = 4)
+
+
+# unigme estimates from 2021 with WHO regions (from Gerard email 18 jan 2021)
+
+mort_rates_2021_region <- read_excel("C:/Users/kpeve/OneDrive - London School of Hygiene and Tropical Medicine/My OneDrive Documents/WHO/data/external/UNIGME_data_for_WHO_2021.xlsx", sheet = "UNIGME_WHOregion", skip = 7) %>%
+  mutate(year_round = floor(as.numeric(Year))) %>%
+  rename_all(tolower) %>%
+  mutate(statistic = case_when(str_detect(indicator, "rate") ~ "rate", str_detect(indicator, "deaths") ~ "deaths", str_detect(indicator, "Deaths") ~ "deaths")) %>%
+  filter(sex == "Total" & region != "World") %>%
+  filter(shortind %in% c("NMR", "U5MR"))
+
+years <- c(2010, 2015, 2020)
+
+# plot parts
+rate_line <- geom_line(aes(y = median, colour = shortind), size = .5)
+ribbon <- geom_ribbon(aes(ymin = lower, ymax = upper, fill = shortind), alpha = 0.4)
+xscale <- scale_x_continuous(breaks = years)
+yscale_rate <- scale_y_continuous(breaks = seq(from = 0, to = 200, by = 25), limits = c(0, 200), expand = c(0, 0))
+colour_rate <- scale_colour_manual(breaks = c("NMR", "U5MR"), labels = c("Neonatal mortality rate\n(first 28 days)", "Under-five mortality rate"), values = c("#a06265", "#5074b1"))
+fill_rate <- scale_fill_manual(breaks = c("NMR", "U5MR"), labels = c("Neonatal mortality rate\n(first 28 days)", "Under-five mortality rate"), values = c("#a06265", "#5074b1"))
+theme <- theme(legend.position = "bottom", text = element_text(size = 12), legend.text = element_text(size = 10))
+labs_rate <- labs(x = NULL, y = "Deaths per 1,000", fill = NULL, colour = NULL)
+
+# values =  c('#66c2a5','#fc8d62','#8da0cb','#e78ac3'))+
+dim2 <- guides(fill = guide_legend(nrow = 2, byrow = TRUE), colour = guide_legend(nrow = 2, byrow = TRUE))
+
+reg_labs <- c(
+  "Africa" = "African Region",
+  "Americas" = "Region of the Americas",
+  "South-East Asia" = "South-East Asian Region",
+  "Europe" = "European Region",
+  "Eastern Mediterranean" = "Eastern Mediterranean Region",
+  "Western Pacific" = "Western Pacific Region"
+)
+
+##
+
+## all rates
+
+ggplot(data = mort_rates_2021_region %>% filter(statistic == "rate") %>% filter(year_round>=2010), aes(x = year_round, y = median, fill = shortind)) +
+  theme_classic() +
+  rate_line +
+  ribbon +
+  xscale +
+  yscale_rate +
+  fill_rate +
+  colour_rate +
+  theme +
+  labs_rate +
+  geom_text(data = mort_rates_2021_region %>% filter((region == "Europe" & shortind != "U5MR") | region != "Europe") %>% filter(year_round == 2010) %>% filter(statistic == "rate") %>% filter(year_round %in% years), aes(label = sprintf("%1.0f", median), hjust = .6, colour = shortind, y = median, x = 2009.5), show.legend = F, fontface = "bold", size = 2.5) +
+  geom_text(data = mort_rates_2021_region %>% filter(region == "Europe" & shortind == "U5MR") %>% filter(year_round == 2010) %>% filter(statistic == "rate") %>% filter(year_round %in% years), aes(label = sprintf("%1.0f", median), hjust = .6, colour = shortind, y = median + 3, x = 2009.5), show.legend = F, fontface = "bold", size = 2.5) +
+  geom_text(data = mort_rates_2021_region %>% filter((region == "Americas" | region == "Western Pacific") & (shortind == "NMR")) %>% filter(year_round == 2020) %>% filter(statistic == "rate") %>% filter(year_round %in% years), aes(label = sprintf("%1.0f", median), colour = shortind, y = median, x = 2020.5), show.legend = F, fontface = "bold", size = 2.5) +
+  geom_text(data = mort_rates_2021_region %>% filter((region == "Americas" | region == "Western Pacific") & (shortind == "U5MR")) %>% filter(year_round == 2020) %>% filter(statistic == "rate") %>% filter(year_round %in% years), aes(label = sprintf("%1.0f", median), colour = shortind, y = median + 4, x = 2020.5), show.legend = F, fontface = "bold", size = 2.5) +
+  geom_text(data = mort_rates_2021_region %>% filter(region == "Europe" & shortind == "U5MR") %>% filter(year_round == 2020) %>% filter(statistic == "rate") %>% filter(year_round %in% years), aes(label = sprintf("%1.0f", median), colour = shortind, y = median, x = 2020.5), show.legend = F, fontface = "bold", size = 2.5) +
+  geom_text(data = mort_rates_2021_region %>% filter(region == "Africa" & shortind != "CMR") %>% filter(year_round == 2020) %>% filter(statistic == "rate") %>% filter(year_round %in% years), aes(label = sprintf("%1.0f", median), colour = shortind, y = median + 2, x = 2020.5), show.legend = F, fontface = "bold", size = 2.5) +
+  labs(x = NULL, y = "Deaths per 1,000", fill = NULL, colour = NULL) +
+  facet_wrap(~region, labeller = as_labeller(reg_labs))
+
+# ggsave("figures/global_strat_mortality_region.png", width=9, height=5, units="in")
+
+mort_rates_2021_region$region <- case_when(
+  mort_rates_2021_region$region == "Africa" ~ "African Region",
+  mort_rates_2021_region$region == "Americas" ~ "Region of the Americas",
+  mort_rates_2021_region$region == "South-East Asia" ~ "South-East Asian Region",
+  mort_rates_2021_region$region == "Europe" ~ "European Region",
+  mort_rates_2021_region$region == "Eastern Mediterranean" ~ "Eastern Mediterranean Region",
+  mort_rates_2021_region$region == "Western Pacific" ~ "Western Pacific Region",
+)
+
+nmru5mr_reg <- ggplot(mort_rates_2021_region %>% filter(statistic == "rate") %>% filter(year_round>=2010), aes(x = year, y = median, fill = region)) +
+  geom_line(aes(y = median, colour = region), size = 2) +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = region), alpha = 0.4)+
+  scale_x_continuous(breaks = c(2010, 2015, 2020), limits = c(2010, 2028)) +
+ # scale_y_continuous(breaks = seq(from = 0, to = 250, by = 25), limits = c(0, 250), expand = c(0, 0)) +
+  scale_fill_viridis_d() +
+  scale_color_viridis_d() +
+  theme_classic() +
+  theme(legend.position = "none", text = element_text(size = 18)) +
+  labs(x = NULL, y = "Deaths per 1,000", fill = NULL, colour = NULL, title = "Neonatal and under-5 mortality") +
+  geom_text_repel(mort_rates_2021_region %>% filter(statistic == "rate") %>% filter(year_round==2020), mapping=aes(label = region), nudge_x = 2, direction = "y", hjust = "left", size = 3.5) +
+  facet_grid(rows = vars(shortind), labeller = as_labeller(c("NMR"="Neonatal mortality rate\n(first 28 days)", "U5MR"="Under-five mortality rate")))
+
+## by income group 
+
+nnu5_inc <- read.csv("data/external/UNIGME-2021-Country-Rates-Deaths-Under-five_reshape.csv") %>% 
+  filter(age == "neonatal" | age == "under_five") %>% left_join(ref_country, by=c("ISO.Code"="CODE_ISO_3")) 
+
+
+
+
+## adolescent 
+
+## adolescent 
+
+All_cause_All_years$region <- case_when(
+  All_cause_All_years$whoreg6 == "1_Afr" ~ "African Region",
+  All_cause_All_years$whoreg6 == "2_Amr" ~ "Region of the Americas",
+  All_cause_All_years$whoreg6 == "3_Sear" ~ "South-East Asian Region",
+  All_cause_All_years$whoreg6 == "4_Eur" ~ "European Region",
+  All_cause_All_years$whoreg6 == "5_Emr" ~ "Eastern Mediterranean Region",
+  All_cause_All_years$whoreg6 == "6_Wpr" ~ "Western Pacific Region",
+)
+
+yllyld_lables <- c(
+  "1_Afr" = "African Region",
+  "2_Amr" = "Region of the Americas",
+  "3_Sear" = "South-East Asian Region",
+  "4_Eur" = "European Region",
+  "5_Emr" = "Eastern Mediterranean Region",
+  "6_Wpr" = "Western Pacific Region",
+  "Males" = "Males",
+  "Females" = "Females",
+  "10-14 years" = "10-14 years",
+  "15-19 years" = "15-19 years"
+)
+
+adol_reg <- ggplot(All_cause_All_years %>% filter(whoreg6 != "") %>% filter(age == "10-14 years" | age == "15-19 years") %>% filter(sex != 3) %>% mutate(age.region = reorder_within(region, year, age, sep = ", ")) %>% mutate(label = if_else(year == max(year), as.character(region), NA_character_)), aes(x = year, y = death_rate, fill = age.region)) +
+  geom_line(aes(y = death_rate, colour = region), size = 2) +
+  scale_x_continuous(breaks = c(2010, 2015, 2019), limits = c(2010, 2028)) +
+  scale_y_continuous(breaks = seq(from = 0, to = 250, by = 25), limits = c(0, 250), expand = c(0, 0)) +
+  scale_color_viridis_d() +
+  theme_classic() +
+  theme(legend.position = "none", text = element_text(size = 18)) +
+  labs(x = NULL, y = "Deaths per 100,000 population", fill = NULL, colour = NULL, title = "Adolescent mortality") +
+  geom_text_repel(aes(label = label), nudge_x = 2, direction = "y", hjust = "left", size = 2.5) +
+  facet_nested(rows = vars(age), cols = vars(sex), labeller = as_labeller(yllyld_lables))
+
+plot_grid(mmr_reg, sb_reg, nmru5mr_reg, adol_reg, align = "v", nrow = 2, rel_heights = c(.5, .5))
+
+#ggsave("figures/global_strat_mortality_region.png", width=15, height=10, unit="in")
+
+#### by income group ####
+
+## maternal
+
+xmart <- fromJSON("https://frontdoor-l4uikgap6gz3m.azurefd.net/MNCAH/MCA_FACT_DATA?$filter=INDICATOR_FK%20in%20(%22BD_MMR%22,%22BD_NMD%22)")
+# INDICATOR_FK,YEAR_FK,ValueNumeric,COUNTRY_FK ValueLow ValueHigh ValueStdDev ValueStdErr Comments COUNTRY_FK__CODE DatasourceLong RESIDENCEAREA_FK__CODE SEX_FK WEALTHQUINTILE_FK
+
+mmr <- as.data.frame(xmart$value)
+
+mmr_income <- mmr %>% dplyr::select(INDICATOR_FK, ValueNumeric, ValueHigh, ValueLow, YEAR_FK, COUNTRY_FK, COUNTRY_FK__CODE) %>% 
+  pivot_wider(names_from = INDICATOR_FK, values_from = c(ValueNumeric, ValueHigh, ValueLow)) %>% 
+  mutate(
+    births=ValueNumeric_BD_NMD/ValueNumeric_BD_MMR*100000,
+    birthshigh=ValueHigh_BD_NMD/ValueHigh_BD_MMR*100000,
+    birthslow=ValueLow_BD_NMD/ValueLow_BD_MMR*100000
+  ) %>% 
+  left_join(ref_country, by=c("COUNTRY_FK__CODE"="CODE_ISO_3")) %>% 
+  group_by(GRP_WB_INCOME, YEAR_FK) %>% 
+  summarise(deaths=sum(ValueNumeric_BD_NMD), births=sum(births), deathslow=sum(ValueLow_BD_NMD), birthslow=sum(birthslow), deathshigh=sum(ValueHigh_BD_NMD), birthshigh=sum(birthshigh)) %>% 
+  mutate(mmr=deaths/births*100000, mmrlow=deathslow/birthslow*100000, mmrhigh=deathshigh/birthshigh*100000)
+
+mmr_income$income[mmr_income$GRP_WB_INCOME=="HIC"] <- "High"
+mmr_income$income[mmr_income$GRP_WB_INCOME=="UMC"] <- "Upper-middle"
+mmr_income$income[mmr_income$GRP_WB_INCOME=="LMC"] <- "Lower-middle"
+mmr_income$income[mmr_income$GRP_WB_INCOME=="LIC"] <- "Low"
+
+mmr_income <- mmr_income %>% mutate(income=factor(income, levels=c("High", "Upper-middle", "Lower-middle", "Low")))
+
+ggplot(data = mmr_income %>% filter(!is.na(income)), aes(x = as.numeric(YEAR_FK), y = mmr)) +
+  geom_line(aes(y = mmr), size = 1, colour = "#7a0177") +
+  geom_ribbon(aes(ymin = mmrlow, ymax = mmrhigh), alpha = 0.4, fill = "#7a0177") +
+  scale_x_continuous(breaks = c(2010,2015,2017), limits = c(2010,2018)) +
+ # scale_y_continuous(breaks = seq(from = 0, to = 300, by = 50), limits = c(0, 300), expand = c(0, 0)) +
+  theme_classic() +
+  theme(legend.position = "bottom", text = element_text(size = 16)) +
+ # geom_text(data = GHO_maternalMMR_2000_2017_regGlob %>% filter(SpatialDimValueCode != "GLOBAL") %>% mutate(year_round = floor(as.numeric(Period))) %>% filter(year_round %in% c(2010,2015,2017)) %>% filter(Indicator == "Maternal mortality ratio (per 100 000 live births)"), aes(label = sprintf("%1.0f", FactValueNumeric), vjust = -.8, y = FactValueNumericHigh), show.legend = F, fontface = "bold", colour = "#7a0177") +
+  labs(x = NULL, y = "Deaths per 100,000 live births", fill = NULL, colour = NULL, title = "Maternal mortality")+
+  facet_wrap(~income)
+
+mmr_inc <- ggplot(data = mmr_income %>% filter(!is.na(income)), aes(x = as.numeric(YEAR_FK), y = mmr)) +
+  geom_line(aes(y = mmr, group=income, colour=income), size = 1) +
+  geom_ribbon(aes(ymin = mmrlow, ymax = mmrhigh, group=income, fill=income), alpha = 0.4) +
+  scale_x_continuous(breaks = c(2010,2015,2017), limits = c(2010,2025)) +
+ # scale_y_continuous(breaks = seq(from = 0, to = 300, by = 50), limits = c(0, 300), expand = c(0, 0)) +
+  scale_fill_viridis_d() +
+  scale_color_viridis_d() +
+  theme_classic() +
+  guides(colour=F, fill=F)+
+  theme(legend.position = "bottom", text = element_text(size = 16)) +
+ # geom_text(data = GHO_maternalMMR_2000_2017_regGlob %>% filter(SpatialDimValueCode != "GLOBAL") %>% mutate(year_round = floor(as.numeric(Period))) %>% filter(year_round %in% c(2010,2015,2017)) %>% filter(Indicator == "Maternal mortality ratio (per 100 000 live births)"), aes(label = sprintf("%1.0f", FactValueNumeric), vjust = -.8, y = FactValueNumericHigh), show.legend = F, fontface = "bold", colour = "#7a0177") +
+  labs(x = NULL, y = "Deaths per 100,000 live births", fill = NULL, colour = NULL, title = "Maternal mortality")+
+  geom_text_repel(mmr_income %>% filter(!is.na(income) & YEAR_FK==2017), mapping=aes(label=income), nudge_x = 2, direction = "y", hjust = "left", size = 4)
+
+dat_maternalmortality <- mmr_income %>% filter(!is.na(income)) %>%  filter(YEAR_FK>=2010) %>% dplyr::select(YEAR_FK, mmr, mmrlow,mmrhigh, income)
+
+
+## stillbirth
+
+stillbirth_ratesb$income[stillbirth_ratesb$GRP_WB_INCOME=="HIC"] <- "High"
+stillbirth_ratesb$income[stillbirth_ratesb$GRP_WB_INCOME=="UMC"] <- "Upper-middle"
+stillbirth_ratesb$income[stillbirth_ratesb$GRP_WB_INCOME=="LMC"] <- "Lower-middle"
+stillbirth_ratesb$income[stillbirth_ratesb$GRP_WB_INCOME=="LIC"] <- "Low"
+
+stillbirth_ratesb <- stillbirth_ratesb %>% mutate(income=factor(income, levels=c("High", "Upper-middle", "Lower-middle", "Low")))
+
+stillbirth_income <- stillbirth_ratesb %>% 
+  group_by(income, year, year_round) %>% 
+  summarise(
+    Median=(sum(Median_sb)/sum(births_med)*1000), 
+    Upper=(sum(Upper_sb)/sum(births_hi)*1000), 
+    Lower=(sum(Lower_sb)/sum(births_lo)*1000))
+
+
+sb_inc <- ggplot(stillbirth_income %>% filter(year_round>=2010) %>% filter(!is.na(income)), aes(x = as.numeric(year), y = Median, fill = income)) +
+  geom_line(aes(y = Median, colour = income), size = 2) +
+  scale_x_continuous(breaks = c(2010, 2015, 2019), limits = c(2010, 2025)) +
+  geom_ribbon(aes(ymin = Lower, ymax = Upper, fill = income), alpha = 0.4)+
+ # scale_y_continuous(breaks = seq(from = 0, to = 250, by = 25), limits = c(0, 250), expand = c(0, 0)) +
+  scale_color_viridis_d() +
+  scale_fill_viridis_d() +
+  theme_classic() +
+  theme(legend.position = "none", text = element_text(size = 18)) +
+  labs(x = NULL, y = "Stillbirths per 1,000 total births", fill = NULL, colour = NULL, title = "Stillbirths") +
+  geom_text_repel(stillbirth_income %>% filter(year_round==2019) %>% filter(!is.na(income)), mapping=aes(label = income), nudge_x = 2, direction = "y", hjust = "left", size = 4)
+
+dat_stillbirth <- stillbirth_income %>% filter(year_round>=2010) %>% filter(!is.na(income)) %>% dplyr::select(year, Median, income, Lower, Upper)
+
+## neonatal under five
+
+mort_rates_2021_inc <- read_excel("C:/Users/kpeve/OneDrive - London School of Hygiene and Tropical Medicine/My OneDrive Documents/WHO/data/external/UNIGME_data_for_WHO_2021.xlsx", sheet = "UNIGME_Countrydata", skip=6) %>%
+  filter(Year>=2010) %>% 
+  filter(Sex=="Total" & (Shortind=="Neonatal.deaths" | Shortind == "NMR" | Shortind == "Under.five.deaths" | Shortind == "U5MR")) %>% 
+  mutate(
+    age = case_when(Shortind== "NMR" | Shortind == "Neonatal.deaths" ~ "Neonatal", Shortind == "U5MR" | Shortind == "Under.five.deaths" ~ "Under-five"), 
+    statistic = case_when(Shortind== "NMR" | Shortind == "U5MR" ~ "rate", Shortind == "Neonatal.deaths" | Shortind == "Under.five.deaths" ~ "deaths")) %>%
+  dplyr::select(-c(Indicator, Shortind)) %>% 
+  pivot_wider(names_from = statistic, values_from = c(Median, Lower, Upper)) %>%
+  mutate(births_med=Median_deaths/Median_rate*1000, births_low=Lower_deaths/Lower_rate*1000, births_high=Upper_deaths/Upper_rate*1000) %>% 
+  left_join(ref_country, by=c("ISO.Code"="CODE_ISO_3")) %>% 
+  group_by(income, age, Year) %>% 
+  summarise(
+    Median=(sum(Median_deaths)/sum(births_med)*1000), 
+    Upper=(sum(Upper_deaths)/sum(births_high)*1000), 
+    Lower=(sum(Lower_deaths)/sum(births_low)*1000)) %>%
+  mutate(year_round = floor(as.numeric(Year))) 
+
+
+nmru5mr_inc <- ggplot(mort_rates_2021_inc %>% filter(year_round>=2010) %>% filter(!is.na(income)), aes(x = as.numeric(year_round), y = Median, fill = income)) +
+  geom_line(aes(y = Median, colour = income), size = 2) +
+  scale_x_continuous(breaks = c(2010, 2015, 2020), limits = c(2010, 2025)) +
+  geom_ribbon(aes(ymin = Lower, ymax = Upper, fill = income), alpha = 0.4)+
+ # scale_y_continuous(breaks = seq(from = 0, to = 250, by = 25), limits = c(0, 250), expand = c(0, 0)) +
+  scale_color_viridis_d() +
+  scale_fill_viridis_d() +
+  theme_classic() +
+  theme(legend.position = "none", text = element_text(size = 18)) +
+  labs(x = NULL, y = "Deaths per 1,000", fill = NULL, colour = NULL, title = "Neonatal and under-5 mortality") +
+  geom_text_repel(mort_rates_2021_inc %>% filter(year_round==2020) %>% filter(!is.na(income)), mapping=aes(label = income), nudge_x = 2, direction = "y", hjust = "left", size = 4)+
+  facet_grid(rows = vars(age), labeller = as_labeller(c("Neonatal"="Neonatal mortality rate\n(first 28 days)", "Under-five"="Under-five mortality rate")))
+
+dat_nmrU5 <- mort_rates_2021_inc %>% filter(year_round>=2010) %>% filter(!is.na(income)) %>% dplyr::select(-c(year_round))
+
+## adolescent
+adol_inc <- All_cause_All_years %>% filter(age == "10-14 years" | age == "15-19 years") %>% filter(sex != 3) %>% mutate(sex.age = reorder_within(sex, year, age, sep = ", ")) %>% mutate(label = if_else(year == max(year), as.character(sex.age), NA_character_)) %>% mutate(income=case_when(wbinc19=="1_LO"~"Low", wbinc19=="2_LMI"~"Lower-middle", wbinc19=="3_UMI"~"Upper-middle", wbinc19=="4_HI" ~"High")) %>% filter(!is.na(income)) %>% mutate(income=factor(income, levels=c("High", "Upper-middle", "Lower-middle", "Low")))
+
+ad_inc <- ggplot(adol_inc, aes(x = year, y = death_rate, fill = sex.age)) +
+  geom_line(aes(y = death_rate, colour=income), size = 2) +
+  scale_x_continuous(breaks = c(2010, 2015, 2019), limits = c(2010, 2025)) +
+  scale_y_continuous(breaks = seq(from = 0, to = 250, by = 25), limits = c(0, 250), expand = c(0, 0)) +
+  scale_color_viridis_d() +
+  theme_classic() +
+  theme(legend.position = "bottom", text = element_text(size = 18)) +
+  labs(x = NULL, y = "Deaths per 100,000 population", fill = NULL, colour = NULL, title = "Adolescent mortality") +
+  guides(colour=F)+
+  facet_nested(rows = vars(age), cols = vars(sex), labeller = as_labeller(yllyld_lables))+
+  geom_text_repel(adol_inc %>% filter(year==2019) %>% filter(!is.na(income)), mapping=aes(label = income), nudge_x = 2, direction = "y", hjust = "left", size = 4)
+
+dat_adolmort <- adol_inc %>% filter(year>=2010) %>% dplyr::select(income, age, sex, year, death_rate)
+
+plot_grid(mmr_inc, sb_inc, nmru5mr_inc,ad_inc, align = "v", nrow = 2, rel_heights = c(.5, .5))
+
+#ggsave("figures/global_strat_mortality_inc.png", width=15, height=10, unit="in")
+#ggsave("figures/global_strat_mortality_inc.svg", width=15, height=10, unit="in")
+
+##export(list(maternalmortality=dat_maternalmortality, stillbirth=dat_stillbirth, neonatal_under5=dat_nmrU5, adolescent=dat_adolmort), "data_files_visualannex/survive.xlsx")
+
+```
+
+# THRIVE
+
+```{r}
+
+## coverage and health outcomes ####
+
+# stunting 
+
+xmart <- fromJSON("https://frontdoor-l4uikgap6gz3m.azurefd.net/MNCAH/MCA_FACT_DATA?$filter=INDICATOR_FK%20in%20(%22CANUT_U5S-2SD%22,%22BD_AFR%22,%22UHC_INDEX_REPORTED_UHC_SCI_RMNCH%22,%22GS_SH_LGR_ACSRHE%22)")
+# INDICATOR_FK,YEAR_FK,ValueNumeric,COUNTRY_FK ValueLow ValueHigh ValueStdDev ValueStdErr Comments COUNTRY_FK__CODE DatasourceLong RESIDENCEAREA_FK__CODE SEX_FK WEALTHQUINTILE_FK
+
+coverage.outcomes <- as.data.frame(xmart$value)
+
+coverage.outcomes <- coverage.outcomes %>% 
+  filter(MEASDEF_FK == "RMNCH" | is.na(MEASDEF_FK)) %>% 
+  mutate(use=case_when(
+    INDICATOR_FK=="BD_AFR" & (YEAR_FK== "2010" | YEAR_FK == "2019") ~"use",
+    INDICATOR_FK=="CANUT_U5S-2SD" & (YEAR_FK== "2010" | YEAR_FK == "2020") ~"use",
+    INDICATOR_FK=="UHC_INDEX_REPORTED_UHC_SCI_RMNCH" & (YEAR_FK== "2010" | YEAR_FK == "2019") ~"use",
+    INDICATOR_FK=="GS_SH_LGR_ACSRHE" & (YEAR_FK== "2019") ~"use"
+  ))
+
+summary <- coverage.outcomes %>%
+  filter(use=="use") %>%
+  group_by(YEAR_FK, INDICATOR_FK) %>%
+  summarise(medians = median(ValueNumeric, na.rm = T))
+
+# Median trend bar plot
+
+BD_AFR <- ggplot() +
+  geom_col(summary %>% filter(INDICATOR_FK=="BD_AFR"), mapping= aes(x = YEAR_FK, y = medians), position = position_dodge(width = 0.5), fill="#66c2a5") +
+  geom_point(coverage.outcomes %>% filter(use == "use") %>% filter(INDICATOR_FK=="BD_AFR"), mapping = aes(x = YEAR_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#468773") +
+  scale_y_continuous(limits = c(0,(max(coverage.outcomes$ValueNumeric))), expand = c(0, 0)) +
+  #scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "per 1,000 females aged 15-19 years", fill = NULL, title = "Adolescent birth rate")
+
+CANUT_U5S2SD <- ggplot() +
+  geom_col(summary %>% filter(INDICATOR_FK=="CANUT_U5S-2SD"), mapping= aes(x = YEAR_FK, y = medians), position = position_dodge(width = 0.5), fill="#fc8d62") +
+  geom_point(coverage.outcomes %>% filter(use == "use") %>% filter(INDICATOR_FK=="CANUT_U5S-2SD"), mapping = aes(x = YEAR_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#c96842") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  #scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "% children under-5\nwith height-for-age <-2SD of the median", fill = NULL, title = "Prevalence of stunting")
+
+UHC_INDEX_REPORTED_UHC_SCI_RMNCH <- ggplot() +
+  geom_col(summary %>% filter(INDICATOR_FK=="UHC_INDEX_REPORTED_UHC_SCI_RMNCH"), mapping= aes(x = YEAR_FK, y = medians), position = position_dodge(width = 0.5), fill="#8da0cb") +
+  geom_point(coverage.outcomes %>% filter(use == "use") %>% filter(INDICATOR_FK=="UHC_INDEX_REPORTED_UHC_SCI_RMNCH"), mapping = aes(x = YEAR_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#576c9c") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  #scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "average coverage of essential services\nbased on tracer interventions", fill = NULL, title = "Coverage of essential RMNCH health services")
+
+GS_SH_LGR_ACSRHE <- ggplot() +
+  geom_col(summary %>% filter(INDICATOR_FK=="GS_SH_LGR_ACSRHE"), mapping= aes(x = YEAR_FK, y = medians), position = position_dodge(width = 0.5), fill="#e78ac3") +
+  geom_point(coverage.outcomes %>% filter(use == "use") %>% filter(INDICATOR_FK=="GS_SH_LGR_ACSRHE"), mapping = aes(x = YEAR_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#a35585") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  #scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "% indicating a country's status and progress\nin existance of laws and regulations", fill = NULL, title = "Access to sexual and reproductive health care,\ninformation, and education")
+
+plot_grid(BD_AFR, CANUT_U5S2SD, UHC_INDEX_REPORTED_UHC_SCI_RMNCH, GS_SH_LGR_ACSRHE, align = "v", nrow = 2, rel_heights = c(.5, .5))
+#ggsave("figures/global_strat_coverage-outcomes.png", width=15, height=10, unit="in")
+#ggsave("figures/global_strat_coverage-outcomes.svg", width=15, height=10, unit="in")
+
+
+
+## coverage outcome by income group
+
+coverage.outcomes <- left_join(coverage.outcomes, ref_country, by=c("COUNTRY_FK__CODE"="CODE_ISO_3")) 
+
+coverage.outcomes$income[coverage.outcomes$GRP_WB_INCOME=="HIC"] <- "High"
+coverage.outcomes$income[coverage.outcomes$GRP_WB_INCOME=="UMC"] <- "Upper-middle"
+coverage.outcomes$income[coverage.outcomes$GRP_WB_INCOME=="LMC"] <- "Lower-middle"
+coverage.outcomes$income[coverage.outcomes$GRP_WB_INCOME=="LIC"] <- "Low"
+
+coverage.outcomes <- coverage.outcomes %>% mutate(income=factor(income, levels=c("High", "Upper-middle", "Lower-middle", "Low")))
+
+summary <- coverage.outcomes %>%
+  filter(use=="use") %>%
+  group_by(YEAR_FK, INDICATOR_FK, income) %>%
+  summarise(medians = median(ValueNumeric, na.rm = T))
+
+# Median trend bar plot
+
+BD_AFR <- ggplot() +
+  geom_col(summary %>% filter(INDICATOR_FK=="BD_AFR") %>% filter(!is.na(income)), mapping= aes(x = YEAR_FK, y = medians), position = position_dodge(width = 0.5), fill="#66c2a5") +
+  geom_point(coverage.outcomes %>% filter(use == "use") %>% filter(INDICATOR_FK=="BD_AFR") %>% filter(!is.na(income)), mapping = aes(x = YEAR_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#468773") +
+  scale_y_continuous(limits = c(0,(max(coverage.outcomes$ValueNumeric))), expand = c(0, 0)) +
+  #scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "per 1,000 females aged 15-19 years", fill = NULL, title = "Adolescent birth rate")+
+  facet_grid(~income)
+
+dat_adolbirthrate_points <- coverage.outcomes %>% filter(use == "use") %>% filter(INDICATOR_FK=="BD_AFR") %>% filter(!is.na(income)) %>% dplyr::select(YEAR_FK, ValueNumeric, COUNTRY_FK, income) %>% filter(YEAR_FK==2019|YEAR_FK==2010)
+dat_adolbirthrate_medians <-summary %>% ungroup() %>% filter(INDICATOR_FK=="BD_AFR") %>% filter(!is.na(income)) %>% dplyr::select(-c(INDICATOR_FK))
+
+CANUT_U5S2SD <- ggplot() +
+  geom_col(summary %>% filter(INDICATOR_FK=="CANUT_U5S-2SD")%>% filter(!is.na(income)), mapping= aes(x = YEAR_FK, y = medians), position = position_dodge(width = 0.5), fill="#fc8d62") +
+  geom_point(coverage.outcomes %>% filter(use == "use") %>% filter(INDICATOR_FK=="CANUT_U5S-2SD")%>% filter(!is.na(income)), mapping = aes(x = YEAR_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#c96842") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  #scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "% children under-5\nwith height-for-age <-2SD of the median", fill = NULL, title = "Prevalence of stunting")+
+  facet_grid(~income)
+
+dat_stunting_points <- coverage.outcomes %>% filter(use == "use") %>% filter(INDICATOR_FK=="CANUT_U5S-2SD")%>% filter(!is.na(income)) %>% dplyr::select(YEAR_FK, ValueNumeric, COUNTRY_FK, income) %>% filter(YEAR_FK==2020|YEAR_FK==2010)
+dat_stunting_medians <- summary %>% filter(INDICATOR_FK=="CANUT_U5S-2SD")%>% filter(!is.na(income)) %>% ungroup() %>% dplyr::select(-c(INDICATOR_FK))
+
+UHC_INDEX_REPORTED_UHC_SCI_RMNCH <- ggplot() +
+  geom_col(summary %>% filter(INDICATOR_FK=="UHC_INDEX_REPORTED_UHC_SCI_RMNCH")%>% filter(!is.na(income)), mapping= aes(x = YEAR_FK, y = medians), position = position_dodge(width = 0.5), fill="#8da0cb") +
+  geom_point(coverage.outcomes %>% filter(use == "use") %>% filter(INDICATOR_FK=="UHC_INDEX_REPORTED_UHC_SCI_RMNCH")%>% filter(!is.na(income)), mapping = aes(x = YEAR_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#576c9c") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  #scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "average coverage of essential services\nbased on tracer interventions", fill = NULL, title = "Coverage of essential RMNCH health services")+
+  facet_grid(~income)
+
+dat_coverageessentialRMNCH_points <- coverage.outcomes %>% filter(use == "use") %>% filter(INDICATOR_FK=="UHC_INDEX_REPORTED_UHC_SCI_RMNCH")%>% filter(!is.na(income)) %>% dplyr::select(YEAR_FK, ValueNumeric, COUNTRY_FK, income) %>% filter(YEAR_FK==2019|YEAR_FK==2010)
+dat_coverageessentialRMNCH_medians <- summary %>% filter(INDICATOR_FK=="UHC_INDEX_REPORTED_UHC_SCI_RMNCH")%>% filter(!is.na(income)) %>% ungroup() %>% dplyr::select(-c(INDICATOR_FK))
+
+GS_SH_LGR_ACSRHE <- ggplot() +
+  geom_col(summary %>% filter(INDICATOR_FK=="GS_SH_LGR_ACSRHE")%>% filter(!is.na(income)), mapping= aes(x = YEAR_FK, y = medians), position = position_dodge(width = 0.5), fill="#e78ac3") +
+  geom_point(coverage.outcomes %>% filter(use == "use") %>% filter(INDICATOR_FK=="GS_SH_LGR_ACSRHE")%>% filter(!is.na(income)), mapping = aes(x = YEAR_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#a35585") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  #scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "% indicating a country's status and progress\nin existance of laws and regulations", fill = NULL, title = "Access to sexual and reproductive health care,\ninformation, and education")+
+  facet_grid(~income)
+
+dat_access_points <- coverage.outcomes %>% filter(use == "use") %>% filter(INDICATOR_FK=="GS_SH_LGR_ACSRHE")%>% filter(!is.na(income))%>% dplyr::select(YEAR_FK, ValueNumeric, COUNTRY_FK, income) %>% filter(YEAR_FK==2019)
+dat_access_medians <- summary %>% filter(INDICATOR_FK=="GS_SH_LGR_ACSRHE")%>% filter(!is.na(income))%>% ungroup() %>% dplyr::select(-c(INDICATOR_FK))
+
+plot_grid(BD_AFR, CANUT_U5S2SD, UHC_INDEX_REPORTED_UHC_SCI_RMNCH, GS_SH_LGR_ACSRHE, align = "v", nrow = 2, rel_heights = c(.5, .5))
+
+#ggsave("figures/global_strat_coverage-outcomes_income.png", width=15, height=10, unit="in")
+#ggsave("figures/global_strat_coverage-outcomes_income.svg", width=15, height=10, unit="in")
+
+#export(list(adolescentbirthrate_medians=dat_adolbirthrate_medians, adolescentbirthrate_points=dat_adolbirthrate_points, stunting_medians=dat_stunting_medians, stunting_points=dat_stunting_points, coverageRMNCH_medians=dat_coverageessentialRMNCH_medians, coverageRMNCH_points=dat_coverageessentialRMNCH_points, access_medians=dat_access_medians, access_points=dat_access_points), "data_files_visualannex/thrive_1.xlsx")
+
+#test line
+
+BD_AFR <- ggplot(coverage.outcomes %>% filter(INDICATOR_FK=="BD_AFR") %>% filter(use=="use")%>% filter(!is.na(income)), aes(x=YEAR_FK, y=ValueNumeric, color = income, group = COUNTRY_FK)) +
+  geom_point()+
+  geom_line() +
+  scale_x_discrete(expand = c(.01,0))+
+ # geom_text(data=coverage.outcomes %>% filter(INDICATOR_FK=="UHC_INDEX_REPORTED_UHC_SCI_RMNCH") %>% filter(use=="use")%>% filter(!is.na(income)) %>% filter(YEAR_FK=="2019"), aes(x=2, y=ValueNumeric, label=str_wrap(NAME_SHORT_EN,25)), colour="black", hjust=1, lineheight=.6)+
+  theme_classic()+
+  theme(text = element_text(size=12))+
+  labs(x = NULL, y = "per 1,000 females aged 15-19 years", fill = NULL, title = "Adolescent birth rate", colour="Income group")
+
+CANUT_U5S2SD <- ggplot(coverage.outcomes %>% filter(INDICATOR_FK=="CANUT_U5S-2SD") %>% filter(use=="use")%>% filter(!is.na(income)), aes(x=YEAR_FK, y=ValueNumeric, color = income, group = COUNTRY_FK)) +
+  geom_point()+
+  geom_line() +
+  scale_x_discrete(expand = c(.01,0))+
+ # geom_text(data=coverage.outcomes %>% filter(INDICATOR_FK=="UHC_INDEX_REPORTED_UHC_SCI_RMNCH") %>% filter(use=="use")%>% filter(!is.na(income)) %>% filter(YEAR_FK=="2019"), aes(x=2, y=ValueNumeric, label=str_wrap(NAME_SHORT_EN,25)), colour="black", hjust=1, lineheight=.6)+
+  theme_classic()+
+  theme(text = element_text(size=12))+
+  labs(x = NULL, y = "% children under-5\nwith height-for-age <-2SD of the median", fill = NULL, title = "Prevalence of stunting", colour="Income group")
+
+UHC_INDEX_REPORTED_UHC_SCI_RMNCH <- ggplot(coverage.outcomes %>% filter(INDICATOR_FK=="UHC_INDEX_REPORTED_UHC_SCI_RMNCH") %>% filter(use=="use")%>% filter(!is.na(income)), aes(x=YEAR_FK, y=ValueNumeric, color = income, group = COUNTRY_FK)) +
+  geom_point()+
+  geom_line() +
+  scale_x_discrete(expand = c(.01,0))+
+ # geom_text(data=coverage.outcomes %>% filter(INDICATOR_FK=="UHC_INDEX_REPORTED_UHC_SCI_RMNCH") %>% filter(use=="use")%>% filter(!is.na(income)) %>% filter(YEAR_FK=="2019"), aes(x=2, y=ValueNumeric, label=str_wrap(NAME_SHORT_EN,25)), colour="black", hjust=1, lineheight=.6)+
+  theme_classic()+
+  theme(text = element_text(size=12))+
+  labs(x = NULL, y = "average coverage of essential services\nbased on tracer interventions", fill = NULL, title = "Coverage of essential RMNCH health services", colour="Income group")
+
+plot_grid(BD_AFR, CANUT_U5S2SD, UHC_INDEX_REPORTED_UHC_SCI_RMNCH, align = "v", rel_heights = c(.5, .5))
+
+#ggsave("figures/global_strat_coverage-outcomes_country.png", width=15, height=10, unit="in")
+
+## Health expenditures ####
+
+xmart <- fromJSON("https://frontdoor-l4uikgap6gz3m.azurefd.net/MNCAH/MCA_FACT_DATA?$filter=INDICATOR_FK%20in%20(%22GS_OOPSCHE%22,%22GS_GOVHEALTHSPEND%22)")
+# INDICATOR_FK,YEAR_FK,ValueNumeric,COUNTRY_FK ValueLow ValueHigh ValueStdDev ValueStdErr Comments COUNTRY_FK__CODE DatasourceLong RESIDENCEAREA_FK__CODE SEX_FK WEALTHQUINTILE_FK
+
+expenditures <- as.data.frame(xmart$value)
+
+expenditures <- left_join(expenditures, ref_country, by=c("COUNTRY_FK__CODE"="CODE_ISO_3")) 
+
+expenditures$income[expenditures$GRP_WB_INCOME=="HIC"] <- "High"
+expenditures$income[expenditures$GRP_WB_INCOME=="UMC"] <- "Upper-middle"
+expenditures$income[expenditures$GRP_WB_INCOME=="LMC"] <- "Lower-middle"
+expenditures$income[expenditures$GRP_WB_INCOME=="LIC"] <- "Low"
+
+expenditures <- expenditures %>% mutate(income=factor(income, levels=c("High", "Upper-middle", "Lower-middle", "Low")))
+
+
+summary <- expenditures %>%
+  filter(YEAR_FK=="2010" | YEAR_FK == "2019") %>%
+  group_by(YEAR_FK, INDICATOR_FK) %>%
+  summarise(medians = median(ValueNumeric, na.rm = T))
+
+# Median trend bar plot
+
+GS_OOPSCHE <-ggplot() +
+  geom_col(summary %>% filter(INDICATOR_FK=="GS_OOPSCHE"), mapping= aes(x = YEAR_FK, y = medians), position = position_dodge(width = 0.5), fill="#f1a340") +
+  geom_point(expenditures %>% filter(INDICATOR_FK=="GS_OOPSCHE") %>% filter(YEAR_FK=="2010" | YEAR_FK == "2019"), mapping = aes(x = YEAR_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#9e5d0b") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  #scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "% of out of pocket payments of total current health expenditures", fill = NULL, title = "Out-of-pocket expenditure")
+
+GS_GOVHEALTHSPEND <- ggplot() +
+  geom_col(summary %>% filter(INDICATOR_FK=="GS_GOVHEALTHSPEND"), mapping= aes(x = YEAR_FK, y = medians), position = position_dodge(width = 0.5), fill="#998ec3") +
+  geom_point(expenditures %>% filter(INDICATOR_FK=="GS_GOVHEALTHSPEND") %>% filter(YEAR_FK=="2010" | YEAR_FK == "2019"), mapping = aes(x = YEAR_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#5c4d96") +
+  scale_y_continuous(expand = c(0, 0)) +
+  #scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "per capita in US$", fill = NULL, title = "Domestic general government health expenditure")
+
+plot_grid(GS_OOPSCHE, GS_GOVHEALTHSPEND, align = "h")
+
+#ggsave("figures/global_strat_expenditures.png", width=15, height=10, unit="in")
+
+# by income
+
+summary <- expenditures %>%
+  filter(YEAR_FK=="2010" | YEAR_FK == "2019") %>%
+  group_by(YEAR_FK, INDICATOR_FK, income) %>%
+  summarise(medians = median(ValueNumeric, na.rm = T))
+
+# Median trend bar plot
+
+GS_OOPSCHE <-ggplot() +
+  geom_col(summary %>% filter(INDICATOR_FK=="GS_OOPSCHE") %>% filter(!is.na(income)), mapping= aes(x = YEAR_FK, y = medians) , position = position_dodge(width = 0.5), fill="#f1a340") +
+  geom_point(expenditures %>% filter(INDICATOR_FK=="GS_OOPSCHE") %>% filter(YEAR_FK=="2010" | YEAR_FK == "2019") %>% filter(!is.na(income)), mapping = aes(x = YEAR_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#9e5d0b") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  #scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "% of out of pocket payments of total current health expenditures", fill = NULL, title = "Out-of-pocket expenditure")+
+  facet_grid(~income)
+
+GS_GOVHEALTHSPEND <- ggplot() +
+  geom_col(summary %>% filter(INDICATOR_FK=="GS_GOVHEALTHSPEND") %>% filter(!is.na(income)), mapping= aes(x = YEAR_FK, y = medians), position = position_dodge(width = 0.5), fill="#998ec3") +
+  geom_point(expenditures %>% filter(INDICATOR_FK=="GS_GOVHEALTHSPEND") %>% filter(YEAR_FK=="2010" | YEAR_FK == "2019") %>% filter(!is.na(income)), mapping = aes(x = YEAR_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#5c4d96") +
+  scale_y_continuous(expand = c(0, 0)) +
+  #scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "per capita in US$", fill = NULL, title = "Domestic general government health expenditure")+
+  facet_grid(~income)
+
+plot_grid(GS_OOPSCHE, GS_GOVHEALTHSPEND, align = "h")
+
+dat_domesticexpend_medians <- summary %>% filter(INDICATOR_FK=="GS_GOVHEALTHSPEND") %>% filter(!is.na(income)) %>% ungroup() %>% dplyr::select(-c(INDICATOR_FK))
+dat_domesticexpend_points <- expenditures %>% filter(INDICATOR_FK=="GS_GOVHEALTHSPEND") %>% filter(YEAR_FK=="2010" | YEAR_FK == "2019") %>% filter(!is.na(income))%>% dplyr::select(YEAR_FK, ValueNumeric, COUNTRY_FK, income) %>% filter(YEAR_FK==2019|YEAR_FK==2010)
+
+dat_outofpocket_medians <- summary %>% filter(INDICATOR_FK=="GS_OOPSCHE") %>% filter(!is.na(income)) %>% ungroup() %>% dplyr::select(-c(INDICATOR_FK))
+dat_outofpocket_points <- expenditures %>% filter(INDICATOR_FK=="GS_OOPSCHE") %>% filter(YEAR_FK=="2010" | YEAR_FK == "2019") %>% filter(!is.na(income))%>% dplyr::select(YEAR_FK, ValueNumeric, COUNTRY_FK, income) %>% filter(YEAR_FK==2019|YEAR_FK==2010)
+
+#export(list(domesticexpend_medians=dat_domesticexpend_medians, domesticexpend_points=dat_domesticexpend_points, outofpocket_medians=dat_outofpocket_medians, outofpocket_points=dat_outofpocket_points), "data_files_visualannex/thrive_2.xlsx")
+
+#ggsave("figures/global_strat_expenditures_income.png", width=15, height=10, unit="in")
+#ggsave("figures/global_strat_expenditures_income.svg", width=15, height=10, unit="in")
+
+GS_GOVHEALTHSPEND <- ggplot(expenditures %>% filter(INDICATOR_FK=="GS_GOVHEALTHSPEND") %>% filter(YEAR_FK=="2010" | YEAR_FK == "2019") %>% filter(!is.na(income)), aes(x=YEAR_FK, y=ValueNumeric, color = income, group = COUNTRY_FK)) +
+  geom_point()+
+  geom_line() +
+  scale_x_discrete(expand = c(.01,0))+
+ # geom_text(data=coverage.outcomes %>% filter(INDICATOR_FK=="UHC_INDEX_REPORTED_UHC_SCI_RMNCH") %>% filter(use=="use")%>% filter(!is.na(income)) %>% filter(YEAR_FK=="2019"), aes(x=2, y=ValueNumeric, label=str_wrap(NAME_SHORT_EN,25)), colour="black", hjust=1, lineheight=.6)+
+  theme_classic()+
+  theme(text = element_text(size=12))+
+  labs(x = NULL, y = "per capita in US$", fill = NULL, title = "Domestic general government health expenditure", colour="Income group")
+
+GS_OOPSCHE <- ggplot(expenditures %>% filter(INDICATOR_FK=="GS_OOPSCHE") %>% filter(YEAR_FK=="2010" | YEAR_FK == "2019") %>% filter(!is.na(income)), aes(x=YEAR_FK, y=ValueNumeric, color = income, group = COUNTRY_FK)) +
+  geom_point()+
+  geom_line() +
+  scale_x_discrete(expand = c(.01,0))+
+ # geom_text(data=coverage.outcomes %>% filter(INDICATOR_FK=="UHC_INDEX_REPORTED_UHC_SCI_RMNCH") %>% filter(use=="use")%>% filter(!is.na(income)) %>% filter(YEAR_FK=="2019"), aes(x=2, y=ValueNumeric, label=str_wrap(NAME_SHORT_EN,25)), colour="black", hjust=1, lineheight=.6)+
+  theme_classic()+
+  theme(text = element_text(size=12))+
+  labs(x = NULL, y = "% of out of pocket payments of total current health expenditures", fill = NULL, title = "Out-of-pocket expenditure", colour="Income group")
+
+plot_grid(GS_OOPSCHE, GS_GOVHEALTHSPEND, align = "h")
+
+#ggsave("figures/global_strat_expenditures_country.png", width=15, height=10, unit="in")
+
+
+## Clean fuels ####
+
+
+xmart <- fromJSON("https://frontdoor-l4uikgap6gz3m.azurefd.net/MNCAH/MCA_FACT_DATA?$filter=INDICATOR_FK%20in%20(%22SDGPOLLUTINGFUELS%22)")
+# INDICATOR_FK,YEAR_FK,ValueNumeric,COUNTRY_FK ValueLow ValueHigh ValueStdDev ValueStdErr Comments COUNTRY_FK__CODE DatasourceLong RESIDENCEAREA_FK__CODE SEX_FK WEALTHQUINTILE_FK
+
+fuels <- as.data.frame(xmart$value)
+
+fuels <- left_join(fuels, ref_country, by=c("COUNTRY_FK__CODE"="CODE_ISO_3")) 
+
+fuels$income[fuels$GRP_WB_INCOME=="HIC"] <- "High"
+fuels$income[fuels$GRP_WB_INCOME=="UMC"] <- "Upper-middle"
+fuels$income[fuels$GRP_WB_INCOME=="LMC"] <- "Lower-middle"
+fuels$income[fuels$GRP_WB_INCOME=="LIC"] <- "Low"
+
+fuels <- fuels %>% mutate(income=factor(income, levels=c("High", "Upper-middle", "Lower-middle", "Low"))) %>% filter(RESIDENCEAREA_FK__CODE=="ALL")
+
+
+summary <- fuels %>%
+  filter(YEAR_FK=="2010" | YEAR_FK == "2019") %>%
+  group_by(YEAR_FK) %>%
+  summarise(medians = median(ValueNumeric, na.rm = T))
+
+
+ggplot() +
+  geom_col(summary, mapping= aes(x = YEAR_FK, y = medians) , position = position_dodge(width = 0.5), fill="#8dd3c7") +
+  geom_point(fuels %>% filter(YEAR_FK=="2010" | YEAR_FK == "2019") , mapping = aes(x = YEAR_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#27695d") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  #scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "%  of population with primary reliance on clean fuels and technologies for cooking", fill = NULL, title = "Clean fuels")
+
+#ggsave("figures/global_strat_fuels.png", width=15, height=10, unit="in")
+
+
+summary <- fuels %>%
+  filter(YEAR_FK=="2010" | YEAR_FK == "2019") %>%
+  filter(RESIDENCEAREA_FK=="ALL") %>% 
+  group_by(YEAR_FK, income) %>%
+  summarise(medians = median(ValueNumeric, na.rm = T))
+
+ggplot() +
+  geom_col(summary %>% filter(!is.na(income)), mapping= aes(x = YEAR_FK, y = medians) , position = position_dodge(width = 0.5), fill="#8dd3c7") +
+  geom_point(fuels %>% filter(YEAR_FK=="2010" | YEAR_FK == "2019") %>% filter(!is.na(income)), mapping = aes(x = YEAR_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#27695d") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  #scale_x_discrete(labels = function(x) str_wrap(x, width = 12)) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "%  of population with primary reliance on clean fuels and technologies for cooking", fill = NULL, title = "Clean fuels")+
+  facet_grid(~income)
+
+dat_cleanfuels_medians <- summary %>% filter(!is.na(income))
+dat_cleanfules_points <- fuels %>% filter(YEAR_FK=="2010" | YEAR_FK == "2019") %>% filter(!is.na(income)) %>% dplyr::select(YEAR_FK, ValueNumeric, COUNTRY_FK, income) %>% filter(YEAR_FK==2019|YEAR_FK==2010)
+
+#export(list(cleanfuels_medians=dat_cleanfuels_medians, cleanfules_points=dat_cleanfules_points), "data_files_visualannex/thrive_3.xlsx")
+
+
+#ggsave("figures/global_strat_fuels_income.png", width=15, height=10, unit="in")
+#ggsave("figures/global_strat_fuels_income.svg", width=15, height=10, unit="in")
+
+
+ggplot(fuels %>% filter(YEAR_FK=="2010" | YEAR_FK == "2019") %>% filter(!is.na(income)) %>% filter(RESIDENCEAREA_FK=="ALL"), aes(x=YEAR_FK, y=ValueNumeric, color = income, group = COUNTRY_FK)) +
+  geom_point()+
+  geom_line() +
+  scale_x_discrete(expand = c(.01,0))+
+ # geom_text(data=coverage.outcomes %>% filter(INDICATOR_FK=="UHC_INDEX_REPORTED_UHC_SCI_RMNCH") %>% filter(use=="use")%>% filter(!is.na(income)) %>% filter(YEAR_FK=="2019"), aes(x=2, y=ValueNumeric, label=str_wrap(NAME_SHORT_EN,25)), colour="black", hjust=1, lineheight=.6)+
+  theme_classic()+
+  theme(text = element_text(size=12))+
+  labs(x = NULL, y = "%  of population with primary reliance on clean fuels and technologies for cooking", fill = NULL, title = "Clean fuels", colour="Income group")
+
+#ggsave("figures/global_strat_fuels_country.png", width=15, height=10, unit="in")
+
+```
+
+# TRANSFORM
+
+```{r transform}
+
+# birth registration RC_BRU5 - not much trend data, mostly for 2021, by sex
+# schooling WCAH_POCAYP - by sex, 2016 or 2011 and 2019
+# sexual violence WCAH_YWSEXVIOL - almost no data
+# sanitation - WAS_BAS_SAF_WAS_HNDF_SOWT, by rural/urban 
+
+xmart <- fromJSON("https://frontdoor-l4uikgap6gz3m.azurefd.net/MNCAH/MCA_FACT_DATA?$filter=INDICATOR_FK%20in%20(%22WAS_BAS_SAF_WAS_HNDF_SOWT%22,%22RC_BRU5%22,%22WCAH_POCAYP%22)")
+# INDICATOR_FK,YEAR_FK,ValueNumeric,COUNTRY_FK ValueLow ValueHigh ValueStdDev ValueStdErr Comments COUNTRY_FK__CODE DatasourceLong RESIDENCEAREA_FK__CODE SEX_FK WEALTHQUINTILE_FK
+
+transform <- as.data.frame(xmart$value)
+
+#### birth reg ####
+
+breg <- transform %>% filter(INDICATOR_FK=="RC_BRU5" & SEX_FK!="BTSX") %>% group_by(COUNTRY_FK) %>% slice_max(order_by = (YEAR_FK), n = 1) %>% filter(YEAR_FK>=2016)
+
+breg_summary <- breg %>% group_by(SEX_FK) %>% summarise(med=median(ValueNumeric))
+
+breg_plot <- ggplot() +
+  geom_col(breg_summary, mapping= aes(x = SEX_FK, y = med), position = position_dodge(width = 0.5), fill="#bebada") +
+  geom_point(breg, mapping = aes(x = SEX_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#7a759c") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  scale_x_discrete(breaks=c("FMLE","MLE"), labels=c("Female", "Male")) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "Percent", fill = NULL, title = "Birth registration")
+
+#### schooling #### 
+
+school <- transform %>% filter(INDICATOR_FK=="WCAH_POCAYP" & SEX_FK!="BTSX" & YEAR_FK>=2010) %>% mutate(time=case_when(YEAR_FK<2016 ~ "2010- 2015", YEAR_FK>=2016 ~ "2016- 2019")) %>% group_by(time, COUNTRY_FK) %>% slice_max(order_by = (YEAR_FK), n = 1) %>% mutate(proficiency = case_when(ProficiencyLevel_FK=="G2O3_MPLM"~"Grade 2-3: Maths", ProficiencyLevel_FK=="G2O3_MPLR"~"Grade 2-3: Reading", ProficiencyLevel_FK=="PE_MPLM"~"Primary: Maths", ProficiencyLevel_FK=="PE_MPLR"~"Primary: Reading", ProficiencyLevel_FK=="SE_MPLM"~"Secondary: Maths", ProficiencyLevel_FK=="SE_MPLR"~"Secondary: Reading"))
+
+# find countries with points in both time periods
+x <- school %>%
+  mutate(one = 1) %>%
+  group_by(COUNTRY_FK, time, proficiency) %>%
+  summarise(sumone = sum(one)) %>%
+  pivot_wider(names_from = time, values_from = sumone) %>%
+  filter(!is.na(`2010- 2015`) & !is.na(`2016- 2019`))
+
+school_summary <- school %>% group_by(SEX_FK, time, proficiency) %>% summarise(med=median(ValueNumeric))
+
+school_plot <- ggplot() +
+  geom_col(school_summary, mapping= aes(x = SEX_FK, y = med), position = position_dodge(width = 0.5), fill="#faa59b") +
+  geom_point(school, mapping = aes(x = SEX_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#fb8072") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  scale_x_discrete(breaks=c("FMLE","MLE"), labels=c("Female", "Male")) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom", axis.text.x = element_text(size=8)) +
+  labs(x = NULL, y = "Percent", fill = NULL, title = "Schooling")+
+  facet_nested(~str_wrap(proficiency, 5) + str_wrap(time, 4))
+
+
+#### sanitation ####
+
+sanitation <- transform %>% filter(INDICATOR_FK=="WAS_BAS_SAF_WAS_HNDF_SOWT" & RESIDENCEAREA_FK!="ALL" & YEAR_FK>=2010) %>% mutate(time=case_when(YEAR_FK<2016 ~ "2010- 2015", YEAR_FK>=2016 ~ "2016- 2020")) %>% group_by(time, COUNTRY_FK, MEASDEF_FK) %>% slice_max(order_by = (YEAR_FK), n = 1) %>% mutate(measure=case_when(MEASDEF_FK=="HANDWASH"~"Handwashing", MEASDEF_FK=="SANITATION"~"Sanitation"))
+
+x <- sanitation %>%
+  mutate(one = 1) %>%
+  group_by(COUNTRY_FK, time, RESIDENCEAREA_FK, MEASDEF_FK) %>%
+  summarise(sumone = sum(one)) %>%
+  pivot_wider(names_from = time, values_from = sumone) %>%
+  filter(!is.na(`2010- 2015`) & !is.na(`2016- 2020`))
+
+sanitation_summary <- sanitation %>% group_by(RESIDENCEAREA_FK, measure, time) %>% summarise(med=median(ValueNumeric))
+
+sanitation_plot <- ggplot() +
+  geom_col(sanitation_summary, mapping= aes(x = RESIDENCEAREA_FK, y = med), position = position_dodge(width = 0.5), fill="#b3de69") +
+  geom_point(sanitation, mapping = aes(x = RESIDENCEAREA_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#7ca337") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  scale_x_discrete(breaks=c("RUR","URB"), labels=c("Rural", "Urban")) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "Percent", fill = NULL, title = "Handwashing and sanitaiton")+
+  facet_nested(~str_wrap(measure, 5) + str_wrap(time, 4))
+
+plot_grid(breg_plot, school_plot, sanitation_plot, align = "v", rel_heights = c(.5, .5))
+
+#ggsave("figures/global_strat_transform.png", width=15, height=10, unit="in")
+
+## by income
+
+ref_country$income <- ref_country$GRP_WB_INCOME
+ref_country$income[ref_country$GRP_WB_INCOME=="HIC"] <- "High"
+ref_country$income[ref_country$GRP_WB_INCOME=="UMC"] <- "Upper-middle"
+ref_country$income[ref_country$GRP_WB_INCOME=="LMC"] <- "Lower-middle"
+ref_country$income[ref_country$GRP_WB_INCOME=="LIC"] <- "Low"
+
+ref_country <- ref_country %>% mutate(income=factor(income, levels=c("High", "Upper-middle", "Lower-middle", "Low")))
+
+# breg
+
+breg <- breg %>% left_join(ref_country, by=c("COUNTRY_FK__CODE"="CODE_ISO_3")) 
+
+breg_summary <- breg %>% group_by(SEX_FK, income) %>% summarise(med=median(ValueNumeric))
+
+breg_plot <-  ggplot() +
+  geom_col(breg_summary %>% filter(!is.na(income)), mapping= aes(x = SEX_FK, y = med), position = position_dodge(width = 0.5), fill="#bebada") +
+  geom_point(breg%>% filter(!is.na(income)), mapping = aes(x = SEX_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#7a759c") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  scale_x_discrete(breaks=c("FMLE","MLE"), labels=c("Female", "Male")) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "Percent", fill = NULL, title = "Birth registration")+
+  facet_grid(~income)
+
+dat_birthreg_medians <- breg_summary %>% filter(!is.na(income))
+dat_birthreg_points <- breg%>% filter(!is.na(income)) %>% dplyr::select(YEAR_FK, ValueNumeric, COUNTRY_FK, income, SEX_FK)
+ 
+ # school
+ 
+ school <- transform %>% filter(INDICATOR_FK=="WCAH_POCAYP" & SEX_FK!="BTSX" & YEAR_FK>=2010) %>% mutate(time=case_when(YEAR_FK<2016 ~ "2010- 2015", YEAR_FK>=2016 ~ "2016- 2019")) %>% group_by(time, COUNTRY_FK) %>% slice_max(order_by = (YEAR_FK), n = 1) %>% mutate(proficiency = case_when(ProficiencyLevel_FK=="G2O3_MPLM"~"Grade 2-3: Maths", ProficiencyLevel_FK=="G2O3_MPLR"~"Grade 2-3: Reading", ProficiencyLevel_FK=="PE_MPLM"~"Primary: Maths", ProficiencyLevel_FK=="PE_MPLR"~"Primary: Reading", ProficiencyLevel_FK=="SE_MPLM"~"Secondary: Maths", ProficiencyLevel_FK=="SE_MPLR"~"Secondary: Reading")) %>% left_join(ref_country, by=c("COUNTRY_FK__CODE"="CODE_ISO_3")) 
+
+# find countries with points in both time periods
+x <- school %>%
+  mutate(one = 1) %>%
+  group_by(COUNTRY_FK, time, proficiency, income) %>%
+  summarise(sumone = sum(one)) %>%
+  pivot_wider(names_from = time, values_from = sumone) %>%
+  filter(!is.na(`2010- 2015`) & !is.na(`2016- 2019`))
+
+school_summary <- school %>% group_by(SEX_FK, time, proficiency, income) %>% summarise(med=median(ValueNumeric))
+
+ school_plot <- ggplot() +
+  geom_col(school_summary, mapping= aes(x = SEX_FK, y = med), position = position_dodge(width = 0.5), fill="#faa59b") +
+  geom_point(school, mapping = aes(x = SEX_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#fb8072") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  scale_x_discrete(breaks=c("FMLE","MLE"), labels=c("Female", "Male")) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom", axis.text.x = element_text(size=8, angle = 45, hjust=1)) +
+  labs(x = NULL, y = "Percent", fill = NULL, title = "Schooling")+
+  facet_nested(income~  str_wrap(proficiency, 5) + str_wrap(time, 4))
+ 
+ dat_schooling_medians <- school_summary
+ dat_schooling_points <- school %>% dplyr::select(YEAR_FK, ValueNumeric, COUNTRY_FK, income, SEX_FK, proficiency)
+ 
+ # sanitation ####
+
+sanitation <- transform %>% filter(INDICATOR_FK=="WAS_BAS_SAF_WAS_HNDF_SOWT" & RESIDENCEAREA_FK!="ALL" & YEAR_FK>=2010) %>% mutate(time=case_when(YEAR_FK<2016 ~ "2010- 2015", YEAR_FK>=2016 ~ "2016- 2020")) %>% group_by(time, COUNTRY_FK, MEASDEF_FK) %>% slice_max(order_by = (YEAR_FK), n = 1) %>% mutate(measure=case_when(MEASDEF_FK=="HANDWASH"~"Handwashing", MEASDEF_FK=="SANITATION"~"Sanitation"))%>% left_join(ref_country, by=c("COUNTRY_FK__CODE"="CODE_ISO_3")) 
+
+x <- sanitation %>%
+  mutate(one = 1) %>%
+  group_by(COUNTRY_FK, time, RESIDENCEAREA_FK, MEASDEF_FK) %>%
+  summarise(sumone = sum(one)) %>%
+  pivot_wider(names_from = time, values_from = sumone) %>%
+  filter(!is.na(`2010- 2015`) & !is.na(`2016- 2020`))
+
+sanitation_summary <- sanitation %>% group_by(RESIDENCEAREA_FK, measure, time, income) %>% summarise(med=median(ValueNumeric))
+
+sanitation_plot <- ggplot() +
+  geom_col(sanitation_summary %>% filter(!is.na(income)), mapping= aes(x = RESIDENCEAREA_FK, y = med), position = position_dodge(width = 0.5), fill="#b3de69") +
+  geom_point(sanitation%>% filter(!is.na(income)), mapping = aes(x = RESIDENCEAREA_FK, y = ValueNumeric), position = "jitter", alpha = .5, colour="#7ca337") +
+  scale_y_continuous(limits = c(0,100), expand = c(0, 0)) +
+  scale_x_discrete(breaks=c("RUR","URB"), labels=c("Rural", "Urban")) +
+  #scale_fill_manual(values = c("#bdbdbd", "#009CDE")) +
+  theme_classic() +
+  theme(legend.position = "bottom", axis.text.x = element_text(size=8, angle = 45, hjust=1)) +
+  labs(x = NULL, y = "Percent", fill = NULL, title = "Handwashing and sanitaiton")+
+  facet_nested(~income + str_wrap(measure, 5) + str_wrap(time, 4))
+
+dat_sanitation_medians <- sanitation_summary %>% filter(!is.na(income))
+dat_sanitation_points <- sanitation%>% filter(!is.na(income)) %>% dplyr::select(income, measure, time, RESIDENCEAREA_FK, COUNTRY_FK)
+
+plot_grid(breg_plot, school_plot, sanitation_plot, align = "v", rel_heights = c(.5, .5))
+
+#ggsave("figures/global_strat_transform_income.png", width=15, height=10, unit="in")
+#ggsave("figures/global_strat_transform_income.svg", width=15, height=10, unit="in")
+
+
+#export(list(birthreg_medians=dat_birthreg_medians, birthreg_points=dat_birthreg_points, schooling_medians=dat_schooling_medians, schooling_points=dat_schooling_points, sanitation_medians=dat_sanitation_medians, sanitation_points=dat_sanitation_points), "data_files_visualannex/transform.xlsx")
+
+```

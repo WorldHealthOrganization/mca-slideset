@@ -1,0 +1,243 @@
+---
+title: "Child cause of death"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, eval=TRUE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+
+renv::restore()
+source("requirements.R")
+library(flextable)
+library(rio)
+
+```
+
+```{r, results='asis'}
+
+#load parquet data
+pq_dataset <- open_dataset("C:/Users/kpeve/OneDrive - London School of Hygiene and Tropical Medicine/My OneDrive Documents/WHO/data/raw/dths_yld_daly.parquet", format = "parquet")
+
+#filter for 
+under1 <- pq_dataset %>% filter(age==.1 | age==.11) %>% collect()
+
+#all cause
+under1 <- under1 %>% group_by(age, year, sex, iso3) %>% mutate(all_cause=dths[causename=="All Causes"])
+
+#summarise
+mortRate <- under1 %>% filter(causename=="All Causes") %>% group_by(age, year) %>% summarise(MortRate=sum(dths)/sum(pop)*1000)
+
+
+#Preterm birth complications 
+ptb <- under1 %>% filter(causename=="Preterm birth complications" & year==2016) %>% group_by(age) %>% summarise(MortRate=sum(dths)/sum(pop)*1000, deaths=sum(dths/1000))
+
+#not in data set? PRI-puerto rico; TWN - Taiwan ; West bank; Gaza strip
+
+# exclusion from table 4.1 in Global COD method 2000-2016 for the year 2016
+exclude2016 <- c("ARM")
+
+causes <- under1 %>% 
+  filter(iso3!="ARM") %>%  # exclude armenia (table 4.1 in global cod method for year 2016)
+  filter(year==2016) %>% 
+  filter(causename!="All Causes") %>% 
+  group_by(causename, age) %>% 
+  summarise(MortRate=round(sum(dths)/sum(pop)*1000,1), deaths=round(sum(dths/1000),0), percent=round(sum(dths)/sum(all_cause)*100,0)) 
+
+
+# under fives
+u5causes <- c("HIV/AIDS", "Diarrhoeal diseases", "Tetanus", "Measles", "Meningitis", "Encephalitis", "Malaria",  "Lower respiratory infections", 
+"Preterm birth complications", "Birth asphyxia and birth trauma", "Neonatal sepsis and infections", "Other congenital anomalies", "Neonatal conditions", "Other neonatal conditions", "Injuries", "Tuberculosis", "All Causes")
+
+#need to add meningitis and encephalitis together
+#what is group one? 
+
+#filter for 
+under5 <- pq_dataset %>% dplyr::select(-c("yll", "yll_low", "yll_up", "yld", "yld_low", "yld_up", "daly", "daly_low", "daly_up")) %>% filter(age==.1 | age==.11 | age==1) %>% filter(causename %in% u5causes) %>% collect()
+
+#all cause
+under5 <- under5 %>% group_by(age, year, sex, iso3) %>% mutate(all_cause=dths[causename=="All Causes"])
+
+# combine meningitis and encephalitis 
+MeningEncph <- under5 %>% filter(causename=="Meningitis" | causename=="Encephalitis") %>% group_by(age, year, sex, iso3, all_cause) %>% summarise(dths=sum(dths), dths_low=sum(dths_low), dths_up=sum(dths_up), pop=mean(pop)) %>% mutate(causename="Meningitis and Encephalitis")
+
+under5 <- rbind(under5 %>% filter(causename!="Meningitis" & causename!="Encephalitis"), MeningEncph)
+
+#combine all under fives
+u5tot <- under5 %>% group_by(year, sex, iso3, causename, ghecause) %>% summarise(dths=sum(dths), dths_low=sum(dths_low), dths_up=sum(dths_up), pop=sum(pop), all_cause=sum(all_cause)) %>% mutate(age="total under five")
+
+under5$age <- as.character(under5$age)
+under5 <- rbind(under5, u5tot)
+
+cause_table <- under5 %>% 
+  filter(causename!="All Causes") %>% 
+  group_by(year, age, causename) %>% 
+  summarise(MortRate=round(sum(dths)/sum(pop)*1000,1), deaths=round(sum(dths/1000),1), percent=round(sum(dths)/sum(all_cause)*100,1)) %>% 
+  #mutate(MortRate=ifelse(MortRate>1, round(MortRate, 0), MortRate), deaths=ifelse(deaths>1, round(deaths, 0), deaths), percent=ifelse(percent>1, round(percent, 0), percent), year=as.character(year)) %>% 
+#  mutate(year=as.character(year)) %>% 
+  mutate(age=case_when(age==0.1~"Neonates age 0-27 days", age==0.11~ "Postneonatal infants age 1-11 months", age==1~"Children age 12-59 months", age=="total under five"~"Total children under five"), age=factor(age, levels=c("Neonates age 0-27 days", "Postneonatal infants age 1-11 months", "Children age 12-59 months", "Total children under five"))) %>% 
+  rename("Rate per 1000 population"=MortRate, "Estimated number (1000s)"=deaths, "Per cent of total deaths (%)"=percent, "Year"=year, "Cause"=causename, "Age"=age)
+
+cause_summary <- cause_table %>% filter(Year==2019) %>% filter(Cause!="Neonatal conditions") %>% group_by(Age) %>% slice_max(order_by = (`Per cent of total deaths (%)`), n = 5)
+
+cause_summary %>% dplyr::select(-c(Year)) %>% regulartable() %>% set_caption("Top five causes of death in 2019, by age group") %>%  merge_v(j = ~Age) %>% theme_zebra() %>% width(width=c(1.6,2.1,1,1,1))
+
+```
+
+\newpage
+
+```{r, results='asis'}
+
+table_list <- list()
+years <- unique(cause_table$Year)
+for(i in 1:length(unique(cause_table$Year))
+    ){
+  #table_list[i] <- 
+    x <- cause_table %>% 
+    filter(Year==years[i]) %>% 
+    dplyr::select(-c(Year)) %>%
+    group_by(Age) %>% 
+    arrange(desc(`Per cent of total deaths (%)`), .by_group = TRUE) %>% 
+    regulartable() %>% 
+    colformat_num(j= ~Year, big.mark = "") %>%  
+    merge_v(j = ~Year+Age) %>% 
+    theme_zebra() %>% 
+    width(width=c(1,1.5,2.1,1,1,1)) %>% 
+    set_caption(paste0("Causes of death by age group, ", years[i]))
+  
+  cat(knit_print(x))
+}
+
+
+
+```
+
+```{r roadinjury0-19-selfharm10-24, include=F}
+
+#load parquet data
+pq_dataset <- open_dataset("C:/Users/kpeve/OneDrive - London School of Hygiene and Tropical Medicine/My OneDrive Documents/WHO/data/raw/dths_yld_daly.parquet", format = "parquet")
+
+#filter for 
+roadinj0.19 <- pq_dataset %>% filter(causename=="Road injury" | causename=="All Causes") %>% filter(age<20) %>% collect()
+
+selfharm10.24 <- pq_dataset %>% filter(causename=="Self-harm" | causename=="All Causes") %>% collect()
+selfharm10.24 <- selfharm10.24 %>% filter(age>5 & age<25)
+
+# columns for all cause
+roadinj0.19 <- roadinj0.19 %>% dplyr::select(-c(ghecause)) %>% pivot_wider(names_from = causename, values_from = c(yll, yll_low, yll_up, yld, yld_low, yld_up, daly, daly_low, daly_up, dths, dths_low, dths_up)) %>% mutate(ghecause=1530, causename="Road injury")
+
+names(roadinj0.19) <- sub("_Road injury", "", names(roadinj0.19))
+
+#write.csv(roadinj0.19, "child_cod_data_KS_211110/roadinj0-19.csv", row.names = F)
+
+selfharm10.24 <- selfharm10.24 %>% dplyr::select(-c(ghecause)) %>% pivot_wider(names_from = causename, values_from = c(yll, yll_low, yll_up, yld, yld_low, yld_up, daly, daly_low, daly_up, dths, dths_low, dths_up)) %>% mutate(ghecause=1610, causename="Self-harm")
+
+names(selfharm10.24) <- sub("_Self-harm", "", names(selfharm10.24))
+
+#write.csv(selfharm10.24, "child_cod_data_KS_211110/selfharm10-24.csv", row.names = F)
+
+
+#summary
+
+#columns that need to be summed
+sum_cols <- c( "pop", "yll_All Causes", "yll", "yll_low_All Causes", "yll_low", "yll_up_All Causes", "yll_up", "yld_All Causes", "yld", "yld_low_All Causes", "yld_low", "yld_up_All Causes", "yld_up", "daly_All Causes", "daly", "daly_low_All Causes", "daly_low", "daly_up_All Causes", "daly_up", "dths_All Causes", "dths", "dths_low_All Causes", "dths_low", "dths_up_All Causes", "dths_up")
+
+#age sex and year summary
+summary_agesex_roadinj0.19 <- roadinj0.19 %>% 
+  filter(age!=0) %>% 
+  group_by(year, age, sex) %>% 
+  summarise_at(c(sum_cols), sum) %>% mutate(ghecause=1530, causename="Road injury")
+
+#write.csv(summary_agesex_roadinj0.19, "child_cod_data_KS_211110/summary_agesex_roadinj0-19.csv", row.names = F)
+
+summary_agesex_selfharm10.24 <- selfharm10.24 %>% 
+  group_by(year, age, sex) %>% 
+  summarise_at(c(sum_cols), sum) %>% mutate(ghecause=1610, causename="Self-harm")
+
+#write.csv(summary_agesex_selfharm10.24, "child_cod_data_KS_211110/summary_agesex_selfharm10-24.csv", row.names = F)
+
+#year summary
+summary_total_roadinj0.19 <- roadinj0.19 %>% 
+  filter(age!=0) %>% 
+  group_by(year) %>% 
+  summarise_at(c(sum_cols), sum) %>% mutate(ghecause=1530, causename="Road injury")
+
+#write.csv(summary_total_roadinj0.19, "child_cod_data_KS_211110/summary_total_roadinj0-19.csv", row.names = F)
+
+summary_total_selfharm10.24 <- selfharm10.24 %>% 
+  group_by(year) %>% 
+  summarise_at(c(sum_cols), sum) %>% mutate(ghecause=1610, causename="Self-harm")
+
+#write.csv(summary_total_selfharm10.24, "child_cod_data_KS_211110/summary_total_selfharm10-24.csv", row.names = F)
+
+# number of deaths and age-specfic death rates per 100000 per country and year
+
+roadinj0.19_country <- roadinj0.19 %>% 
+  group_by(year, iso3) %>%
+  filter(age!=0) %>% 
+  summarise("Number of deaths"=sum(dths), "Age-specific death rates per 100000 (for 0-19)"=sum(dths)/sum(pop)*100000)  
+
+selfharm10.24_country <- selfharm10.24 %>% 
+  group_by(year, iso3) %>%
+  summarise("Number of deaths"=sum(dths), "Age-specific death rates per 100000 (for 10-24)"=sum(dths)/sum(pop)*100000)  
+
+#export(list("road traffic injuries"=roadinj0.19_country, "self harm"=selfharm10.24_country), "child_cod_data_KS_211110/road-traffic-suicide-country2000-2019.xlsx", row.names=F)
+
+```
+
+```{r requestKS-29Nov21}
+
+# smaller file - 2019 GHE deaths - calculate crude rate (deatys/pop*1000), group by age (neonatal = .1; postneonatal =.11 + 1; under-5 =.1 + .11 + 1)
+
+#load parquet data
+pq_dataset <- open_dataset("C:/Users/kpeve/OneDrive - London School of Hygiene and Tropical Medicine/My OneDrive Documents/WHO/data/raw/dths_yld_daly.parquet", format = "parquet")
+
+#filter for 
+gheU5deaths2019 <- pq_dataset %>% filter(year==2019) %>% dplyr::select(-c("year", "yll", "yll_low", "yll_up", "yld", "yld_low", "yld_up", "daly", "daly_low", "daly_up")) %>% filter(age<5)  %>% collect()
+
+#group together by sex, add crude rate
+gheU5deaths2019 <- gheU5deaths2019 %>% group_by(iso3, age, ghecause, causename) %>% summarise(pop=sum(pop), dths=sum(dths), dths_low=sum(dths_low), dths_up=sum(dths_up)) %>% mutate(crude_rate=dths/pop*1000)
+
+#save file with orginal ghe age levels
+
+#write.csv(gheU5deaths2019, "C:/Users/kpeve/OneDrive - London School of Hygiene and Tropical Medicine/My OneDrive Documents/WHO/data/raw/gheU5deaths2019_byAllAgeLevels.csv", row.names = F)
+
+#summarise for three age groups: neonatal, postneonatal, underfive
+
+#neonatal 
+gheU5deaths2019_neonatal <- gheU5deaths2019 %>% filter(age==.1) %>% mutate(age="neonatal (.1)")
+
+#postneonatal (.11 + 1)
+gheU5deaths2019_postneonatal <- gheU5deaths2019 %>% filter(age==.11|age==1) %>% group_by(iso3, ghecause, causename) %>% summarise(pop=sum(pop), dths=sum(dths), dths_low=sum(dths_low), dths_up=sum(dths_up)) %>% mutate(age="postneonatal (.11+1)") %>% mutate(crude_rate=dths/pop*1000)
+
+#under-5 (.1 + .11 + 1)
+gheU5deaths2019_under5 <- gheU5deaths2019 %>% filter(age==.1|age==.11|age==1) %>% group_by(iso3, ghecause, causename) %>% summarise(pop=sum(pop), dths=sum(dths), dths_low=sum(dths_low), dths_up=sum(dths_up)) %>% mutate(age="under-5 (.1+.11+1)") %>% mutate(crude_rate=dths/pop*1000)
+
+
+gheU5deaths2019_nn_pn_u5 <- rbind(gheU5deaths2019_neonatal, gheU5deaths2019_postneonatal, gheU5deaths2019_under5)
+
+#save with three age groupings 
+#write.csv(gheU5deaths2019_nn_pn_u5, "C:/Users/kpeve/OneDrive - London School of Hygiene and Tropical Medicine/My OneDrive Documents/WHO/data/raw/gheU5deaths2019_nn_pn_u5.csv", row.names = F)
+
+
+#global to check tables in commentary for lancet 
+
+global <- gheU5deaths2019_nn_pn_u5 %>% group_by(age, ghecause, causename) %>% summarise(pop=sum(pop), dths=sum(dths), dths_low=sum(dths_low), dths_up=sum(dths_up))
+
+#checks for 5-9
+
+dths5.14 <- pq_dataset %>% filter(year==2019) %>% dplyr::select(-c("year", "yll", "yll_low", "yll_up", "yld", "yld_low", "yld_up", "daly", "daly_low", "daly_up")) %>% filter(age==5 | age==10)  %>% collect()
+
+dths5.14 <- dths5.14 %>% group_by(age, ghecause, causename) %>% summarise(dths=sum(dths)) 
+
+dths15.19 <- pq_dataset %>% filter(year==2019) %>% dplyr::select(-c("year", "yll", "yll_low", "yll_up", "yld", "yld_low", "yld_up", "daly", "daly_low", "daly_up")) %>% filter(age==15)  %>% collect()
+
+dths15.19 <- dths15.19 %>% group_by(age, sex, ghecause, causename) %>% summarise(dths=sum(dths)) 
+
+```
+
