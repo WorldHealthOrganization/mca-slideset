@@ -1,6 +1,31 @@
 ## setup renv
-# define packages
 
+# > renv::status()
+# The following package(s) are in an inconsistent state:
+#   
+# The following package(s) are used in this project, but are not installed:
+# - doMC
+# - maptools
+# - rgdal
+# - rgeos
+# - whomapper
+
+  
+# define packages
+install.packages("arcgis", repos = c("https://r-arcgis.r-universe.dev", "https://cloud.r-project.org"))
+install.packages(
+  "arcgisbinding", 
+  repos = "https://r.esri.com", 
+  type = "win.binary"
+)
+
+install.packages("C:/Users/lopezg/Downloads/arcgisbinding_1.0.1.311.zip", repos = NULL)
+
+
+
+library(arcgis)
+library(arcgisbinding)
+library(ggbump)
 library(readxl)
 library(gtsummary)
 library(haven)

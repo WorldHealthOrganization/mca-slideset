@@ -6,7 +6,7 @@
 
 | **File**                                                      | **Usage**                                                                 | 
 | ------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `Slideset.Rproj`                                              | Rproj file for slideset                                                   |
+| `mca-slideset.Rproj`                                          | Rproj file for slideset                                                   |
 | `Slideset.Rmd`                                                | Markdown file with all code for slideset                                  |
 | `adol_cod_2000-2019_reshape.R`                                | Convert MCEE adolescent data from wide to long, combine with under five   |
 | `global_strategy_visual_annex.Rmd`                            | code for draft figures for global strategy visual annex                   |
@@ -16,7 +16,6 @@
 | `Rintro.docx`                                                 | Theresa requested some materials to learn R basics                        |
 | `Rintro.Rmd`                                                  | Code to create the word doc handout for learning R basics                 |
 | `Rintro.R`                                                    | Practice code to accompany handout for leraning R basics                  |
-| `aging_colours.pptx`                                          | Colour-blind friendly colour palette for aging slides                   |
 | `childData_organise.Rmd`                                      | create various files from GHE data for checking/use                       |
 | `reshape_jhu_data.R`                                          | create various files from jhu data for checking/use                       |
 | `WHO_Map_Template.aptx`                                       | WHO map template for ArcGIS                                               |
