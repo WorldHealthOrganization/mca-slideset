@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+output
+test
+data-gitignore
+vignettes/internal
+data-archive_m60
