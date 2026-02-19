@@ -21,7 +21,9 @@ source("requirements.R")
 library(lubridate)
 
 # country/area list from xmart: https://extranet.who.int/xmart4/REFMART/data/REF_COUNTRY
+
 xmart_refCountry <- fromJSON("https://xmart-api-public.who.int/REFMART/REF_COUNTRY")
+
 # INDICATOR_FK,YEAR_FK,ValueNumeric,COUNTRY_FK ValueLow ValueHigh ValueStdDev ValueStdErr Comments COUNTRY_FK__CODE DatasourceLong RESIDENCEAREA_FK__CODE SEX_FK WEALTHQUINTILE_FK
 
 ref_country <- as.data.frame(xmart_refCountry$value)

@@ -36,6 +36,7 @@
 # The minimum run length for plausible results is "quick". Official estimates use a minimum run length of "long".
 devtools::load_all()
 round_name_of_global_reference <- 'estimates_11-12-2025'
+round_name <- "test"
 round_first_year <- 1985
 round_last_year <- 2023
 selected_country_iso <- "BRA"

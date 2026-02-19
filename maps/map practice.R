@@ -1,7 +1,23 @@
-library(rgdal)
 library(broom)
-library(maptools)
-library(rgeos)
+
+# library(rgdal)
+# library(maptools)
+# library(rgeos)
+
+
+
+# Package ‘rgdal’ was removed from the CRAN repository.
+# Formerly available versions can be obtained from the archive.
+# Archived on 2023-10-16 at the request of the maintainer. Consider using 'sf' or 'terra' instead.
+# 
+# Package ‘maptools’ was removed from the CRAN repository.
+# Formerly available versions can be obtained from the archive.
+# Archived on 2023-10-16 at the request of the maintainer. Consider using 'sf' or 'terra' instead.
+# 
+# Package ‘rgeos’ was removed from the CRAN repository.
+# Formerly available versions can be obtained from the archive.
+# Archived on 2023-10-16 at the request of the maintainer. Consider using 'sf' or 'terra' instead.
+
 
 WHOspat <- readOGR(dsn = "C:/Users/kpeve/OneDrive - London School of Hygiene and Tropical Medicine/My OneDrive Documents/WHO/MapTemplate_generalized_2013/Shapefiles")
 

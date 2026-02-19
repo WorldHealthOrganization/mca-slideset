@@ -22,6 +22,13 @@ install.packages(
 install.packages("C:/Users/lopezg/Downloads/arcgisbinding_1.0.1.311.zip", repos = NULL)
 
 
+library(devtools)
+devtools::install_github("whocov/whomapper", 
+                         force = TRUE, 
+                         dependencies = TRUE)
+
+library(whomapper)
+
 
 library(arcgis)
 library(arcgisbinding)
@@ -49,6 +56,36 @@ library(RColorBrewer)
 library(jsonlite)
 library(httr)
 library(cowplot)
+
+# install.packages("bmat")
+# install.packages("doMC")
+install.packages("float")
+install.packages("ggnewscale")
+install.packages("here")
+install.packages("kableExtra")
+# install.packages("maptools")
+install.packages("MCMCvis")
+# install.packages("rgdal")
+# install.packages("rgeos")
+install.packages("tidybayes")
+install.packages("tolerance")
+# install.packages("whomapper")
+
+# library(bmat) 
+# library(doMC) 
+library(float) 
+library(ggnewscale) 
+library(here) 
+library(kableExtra) 
+# library(maptools) 
+library(MCMCvis) 
+# library(rgdal) 
+# library(rgeos) 
+library(tidybayes) 
+library(tolerance) 
+# library(whomapper) 
+
+
 
 # use renv::init() to initialise the the renv
 # use renv::snapshot() to save the state of the art project library
